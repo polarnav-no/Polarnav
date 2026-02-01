@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PolarNav - Gentoo Edition v1.2 (Maritime)</title>
-    <meta name="description" content="PolarNav - Gratis verktøy for isnavigasjon i Arktis og Antarktis. Satellittbilder, iskart og ruter direkte i nettleseren. Utviklet av navigatører for navigatører.">
+    <title>PolarNav - Gentoo Edition v1.2 (Gentoo)</title>
     
+    <meta name="description" content="PolarNav - Gratis verktøy for isnavigasjon i Arktis og Antarktis. Satellittbilder, iskart og ruter direkte i nettleseren. Utviklet av navigatører for navigatører.">
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -119,7 +120,7 @@
             </div>
             <div class="flex flex-col justify-center">
                 <h1 class="font-bold text-sm tracking-widest text-white leading-none">POLAR<span class="text-blue-400">NAV</span></h1>
-                <span class="text-[8px] text-slate-400 tracking-[0.2em] font-medium mt-0.5">MARITIME EDITION</span>
+                <span class="text-[8px] text-slate-400 tracking-[0.2em] font-medium mt-0.5">GENTOO EDITION</span>
             </div>
         </div>
         <div class="flex items-center gap-4 justify-end">
@@ -160,7 +161,14 @@
             <i class="fa-solid fa-chevron-right text-sm"></i>
         </button>
         <div class="w-px h-5 bg-slate-600 mx-2"></div>
-        <button onclick="fetchLatest()" class="h-8 px-3 flex items-center gap-1.5 text-[10px] font-bold text-green-400 hover:text-white hover:bg-green-700/40 rounded transition uppercase tracking-wider" title="Sett til Nå">
+        
+        <button id="btn-toggle-sentinel" onclick="toggleSentinelMain()" class="h-8 px-3 flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-white hover:bg-slate-700 rounded transition uppercase tracking-wider border border-transparent" title="Slå satellittlag av/på for å spare data">
+            <i class="fa-solid fa-satellite-dish"></i> <span id="lbl-sentinel">AV</span>
+        </button>
+
+        <div class="w-px h-5 bg-slate-600 mx-2"></div>
+
+        <button onclick="fetchLatest()" class="h-8 px-2 flex items-center gap-1.5 text-[10px] font-bold text-green-400 hover:text-white hover:bg-green-700/40 rounded transition uppercase tracking-wider" title="Sett til Nå">
             <i class="fa-solid fa-bolt"></i> NÅ
         </button>
         <button onclick="fetchData()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded transition ml-1" title="Tving oppdatering">
@@ -370,7 +378,6 @@
         // Leaflet CRS Definitions
         const crs3995 = new L.Proj.CRS('EPSG:3995', '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs', {
             origin: [-4194304, 4194304], 
-            // UPDATED RESOLUTIONS FOR DEEP ZOOM
             resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4], 
             bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
         });
@@ -382,13 +389,17 @@
         const state = {
             sidebarOpen: true, settingsOpen: false, apiKey: "", layerName: "EW_HH_DB", 
             currentProjection: "EPSG:3857", mapInstance: null, selectedDate: new Date(),
-            layers: { google: null, ice: null, sentinel: null, measure: null, ship: null, graticule: null, markers: null },
+            layers: { google: null, ice: null, sentinel: null, measure: null, ship: null, graticule: null, markers: null, track: null },
             customLayers: {}, customData: [], brightness: 600, simulatingMovement: true,
             currentPos: { lat: 78.0, lng: 14.0, hdg: 0 }, measureActive: false, measurePoints: [],
             showGraticule: false, graticuleColor: '#06b6d4',
             markerMode: false, selectedMarkerColor: '#ef4444', selectedMarkerIcon: '🐻‍❄️', userMarkers: [],
             lookbackDays: 2,
-            isFollowing: false
+            isFollowing: false,
+            // TRACKING STATE
+            trackPoints: [],
+            // SATELLITE TOGGLE
+            sentinelActive: false // Start AV
         };
 
         function loadSavedCredentials() {
@@ -440,8 +451,11 @@
 
             state.mapInstance = L.map('map', options);
             L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(state.mapInstance);
+            
             state.layers.measure = L.layerGroup().addTo(state.mapInstance);
             state.layers.markers = L.layerGroup().addTo(state.mapInstance);
+            state.layers.track = L.polyline([], {color: '#f97316', weight: 2, dashArray: '4, 8', opacity: 0.6}).addTo(state.mapInstance);
+
             addBaseLayers(); addOverlayLayers(); setupMapEvents(); setupDragAndDrop(); restoreCustomLayers(); 
             if(state.showGraticule) createGraticuleLayer();
             restoreUserMarkers();
@@ -476,7 +490,7 @@
         // --- LAYERS ---
         function addBaseLayers() {
             if (state.currentProjection === 'EPSG:3995') {
-                 // GMRT North with UPDATED MAXZOOM
+                 // GMRT North
                  L.tileLayer.wms('https://www.gmrt.org/services/mapserver/wms_NP?', { 
                     layers: 'North_Polar_Bathymetry', 
                     format: 'image/png', 
@@ -505,12 +519,17 @@
             state.layers.ice.setZIndex(10); 
             if (document.getElementById('check-ice').checked) state.layers.ice.addTo(state.mapInstance);
             
+            // SENTINEL STARTES IKKE HER AUTOMATISK LENGER, KUN HVIS KNAPP ER PÅ
             state.layers.sentinel = generateSentinelLayer(dateStr); 
             state.layers.sentinel.setZIndex(20); 
-            if (document.getElementById('check-sentinel').checked) { 
+            
+            // Hvis knappen var PÅ før refresh, legg til
+            if (state.sentinelActive) { 
                 state.layers.sentinel.addTo(state.mapInstance); 
                 updateSentinelBrightness(state.brightness);
             }
+            // Synkroniser checkbox i meny
+            document.getElementById('check-sentinel').checked = state.sentinelActive;
         }
 
         function changeProjection() { state.currentProjection = document.getElementById('proj-select').value; const gd = document.getElementById('check-google').parentElement; if (state.currentProjection === 'EPSG:3857') { gd.classList.remove('opacity-50', 'pointer-events-none'); document.getElementById('check-google').checked = false; } else { gd.classList.add('opacity-50', 'pointer-events-none'); document.getElementById('check-google').checked = false; } initMap(); }
@@ -553,11 +572,56 @@
                 const timeParam = `${startStr}T00:00:00Z/${endStr}T23:59:59Z`;
 
                 return L.tileLayer.wms(u, { 
-                    layers: activeLayerName, format: 'image/png', transparent: true, version: (state.currentProjection === 'EPSG:3857' ? '1.3.0' : '1.1.1'), attribution: 'Copernicus', uppercase: true, tileSize: 256, updateWhenIdle: true, keepBuffer: 10, tiled: true, useCache: true, crossOrigin: 'anonymous', cacheMaxAge: 604800000, time: timeParam 
+                    layers: activeLayerName, 
+                    format: 'image/png', 
+                    transparent: true, 
+                    version: (state.currentProjection === 'EPSG:3857' ? '1.3.0' : '1.1.1'), 
+                    attribution: 'Copernicus', 
+                    uppercase: true, 
+                    // OPTIMIZATION: USE 512px TILES TO REDUCE REQUESTS BY 4X
+                    tileSize: 512, 
+                    width: 512,
+                    height: 512,
+                    updateWhenIdle: true, 
+                    keepBuffer: 10,
+                    tiled: true, 
+                    useCache: true, 
+                    crossOrigin: 'anonymous', 
+                    cacheMaxAge: 604800000, 
+                    time: timeParam 
                 });
             } return generateSimulatedRadarLayer('#22c55e', 'Sentinel-1 (Simulert)');
         }
         function generateSimulatedRadarLayer(c, t) { const lg = L.layerGroup(); for (let i=0; i<3; i++) L.rectangle([[77+Math.random()*3, 10+Math.random()*15],[77.8, 11.2]], { color: c, weight: 2, fillColor: c, fillOpacity: 0.1, dashArray: '5, 5' }).bindPopup(`<b>${t}</b>`).addTo(lg); return lg; }
+
+        // --- NEW: TOGGLE SENTINEL FUNCTION ---
+        function toggleSentinelMain() {
+            state.sentinelActive = !state.sentinelActive;
+            const btn = document.getElementById('btn-toggle-sentinel');
+            const lbl = document.getElementById('lbl-sentinel');
+            const cb = document.getElementById('check-sentinel');
+
+            if (state.sentinelActive) {
+                lbl.innerText = "PÅ";
+                btn.classList.add('text-green-400', 'border-green-400/30');
+                btn.classList.remove('text-slate-400', 'border-transparent');
+                
+                if (!state.mapInstance.hasLayer(state.layers.sentinel)) {
+                    state.layers.sentinel.addTo(state.mapInstance);
+                    updateSentinelBrightness(state.brightness);
+                }
+                cb.checked = true;
+            } else {
+                lbl.innerText = "AV";
+                btn.classList.remove('text-green-400', 'border-green-400/30');
+                btn.classList.add('text-slate-400', 'border-transparent');
+                
+                if (state.mapInstance.hasLayer(state.layers.sentinel)) {
+                    state.mapInstance.removeLayer(state.layers.sentinel);
+                }
+                cb.checked = false;
+            }
+        }
 
         function setupMapEvents() {
             state.mapInstance.on('mousemove', function(e) { document.getElementById('cursor-pos').innerText = `${toDMS(e.latlng.lat, true)}, ${toDMS(e.latlng.lng, false)}`; const sl = L.latLng(state.currentPos.lat, state.currentPos.lng); document.getElementById('cursor-range').innerText = `${(state.mapInstance.distance(sl, e.latlng) / 1852).toFixed(1)} nm / ${calculateBearing(state.currentPos.lat, state.currentPos.lng, e.latlng.lat, e.latlng.lng).toFixed(0)}°`; });
@@ -711,7 +775,17 @@
             fetchData(); 
         }
 
-        function toggleLayer(key) { const l = state.layers[key]; const cb = document.getElementById(`check-${key}`); if(state.mapInstance.hasLayer(l)){ state.mapInstance.removeLayer(l); cb.checked=false; } else { state.mapInstance.addLayer(l); cb.checked=true; if(key==='sentinel') setTimeout(()=>updateSentinelBrightness(state.brightness),100); } }
+        function toggleLayer(key) { 
+            if(key === 'sentinel') {
+                toggleSentinelMain(); // Bruk hoved-toggle funksjonen for sentinel
+                return;
+            }
+            const l = state.layers[key]; 
+            const cb = document.getElementById(`check-${key}`); 
+            if(state.mapInstance.hasLayer(l)){ state.mapInstance.removeLayer(l); cb.checked=false; } 
+            else { state.mapInstance.addLayer(l); cb.checked=true; } 
+        }
+
         function toggleCustomLayer(id) { const l = state.customLayers[id]; const cb = document.getElementById(`check-${id}`); if(state.mapInstance.hasLayer(l)){ state.mapInstance.removeLayer(l); cb.checked=false; } else { state.mapInstance.addLayer(l); cb.checked=true; } }
         function fetchData() { 
             const d = document.getElementById('header-date-input').value; 
@@ -725,9 +799,12 @@
             if(document.getElementById('check-ice').checked) state.layers.ice.addTo(state.mapInstance); 
 
             if(state.mapInstance.hasLayer(state.layers.sentinel)) state.mapInstance.removeLayer(state.layers.sentinel); 
+            
+            // Re-generer laget, men ikke legg til hvis den er AV
             state.layers.sentinel = generateSentinelLayer(d); 
             state.layers.sentinel.setZIndex(20); 
-            if(document.getElementById('check-sentinel').checked) { 
+            
+            if(state.sentinelActive) { 
                 state.layers.sentinel.addTo(state.mapInstance); 
                 updateSentinelBrightness(state.brightness);
             } 
@@ -759,6 +836,18 @@
         function updatePosition(lat, lng, spd, hdg) { 
             state.currentPos = { lat, lng, hdg: hdg || 0 };
             
+            // --- TRACK LOGIC ---
+            if (state.layers.track) {
+                const lastPoint = state.trackPoints.length > 0 ? state.trackPoints[state.trackPoints.length - 1] : null;
+                if (!lastPoint || (lastPoint[0] !== lat || lastPoint[1] !== lng)) {
+                    state.trackPoints.push([lat, lng]);
+                    if (state.trackPoints.length > 2000) {
+                        state.trackPoints.shift();
+                    }
+                    state.layers.track.setLatLngs(state.trackPoints);
+                }
+            }
+
             // Create or update marker
             if (!state.layers.ship || !state.mapInstance.hasLayer(state.layers.ship)) {
                 if(state.layers.ship) state.mapInstance.removeLayer(state.layers.ship);
@@ -780,11 +869,9 @@
                     iconAnchor: [20, 20] 
                 });
 
-                // Z-index 10000 ensures it is ALWAYS on top
                 state.layers.ship = L.marker([lat, lng], { icon: shipIcon, zIndexOffset: 10000 }).addTo(state.mapInstance);
             } else { 
                 state.layers.ship.setLatLng([lat, lng]); 
-                // Update rotation using CSS Transform on the inner DIV
                 const iconEl = state.layers.ship.getElement();
                 if(iconEl) {
                     const inner = iconEl.querySelector('.own-ship-container');
@@ -829,4 +916,3 @@
 </body>
 
 </html>
-
