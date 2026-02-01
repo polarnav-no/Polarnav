@@ -58,7 +58,7 @@
             width: 20px; height: 20px; text-align: center; line-height: 20px;
         }
 
-        /* --- NYTT SKIPSSYMBOL CSS --- */
+        /* --- SKIPSSYMBOL CSS --- */
         .own-ship-container {
             display: flex;
             align-items: center;
@@ -368,7 +368,10 @@
 
         // Leaflet CRS Definitions
         const crs3995 = new L.Proj.CRS('EPSG:3995', '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs', {
-            origin: [-4194304, 4194304], resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8], bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
+            origin: [-4194304, 4194304], 
+            // UPDATED RESOLUTIONS FOR DEEP ZOOM
+            resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8, 4], 
+            bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
         });
 
         // --- 2. STATE ---
@@ -384,7 +387,6 @@
             showGraticule: false, graticuleColor: '#06b6d4',
             markerMode: false, selectedMarkerColor: '#ef4444', selectedMarkerIcon: '🐻‍❄️', userMarkers: [],
             lookbackDays: 2,
-            // NY STATE FOR TRACKING
             isFollowing: false
         };
 
@@ -473,7 +475,19 @@
         // --- LAYERS ---
         function addBaseLayers() {
             if (state.currentProjection === 'EPSG:3995') {
-                 L.tileLayer.wms('https://www.gmrt.org/services/mapserver/wms_NP?', { layers: 'North_Polar_Bathymetry', format: 'image/png', transparent: false, attribution: 'GMRT', version: '1.3.0', tiled: true, useCache: true, crossOrigin: 'anonymous' }).addTo(state.mapInstance);
+                 // GMRT North with UPDATED MAXZOOM
+                 L.tileLayer.wms('https://www.gmrt.org/services/mapserver/wms_NP?', { 
+                    layers: 'North_Polar_Bathymetry', 
+                    format: 'image/png', 
+                    transparent: false, 
+                    attribution: 'GMRT', 
+                    version: '1.3.0', 
+                    tiled: true, 
+                    useCache: true, 
+                    crossOrigin: 'anonymous',
+                    maxZoom: 18, 
+                    minZoom: 1
+                 }).addTo(state.mapInstance);
             } else { 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', opacity: 0.3, useCache: true, crossOrigin: 'anonymous' }).addTo(state.mapInstance);
             }
@@ -814,4 +828,3 @@
 </body>
 
 </html>
-
