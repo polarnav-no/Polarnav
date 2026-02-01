@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PolarNav - Gentoo Edition v1.8 (Stable Cache)</title>
+    <title>PolarNav - Gentoo Edition v1.2 (Stable Cache)</title>
     
     <meta name="description" content="PolarNav - Gratis verktøy for isnavigasjon i Arktis og Antarktis. Satellittbilder, iskart, ruter og diverse verktøy direkte i nettleseren.">
 
@@ -289,7 +289,7 @@
                 </div>
             </div>
         </div>
-        <div class="py-1 bg-slate-950 text-[8px] text-slate-600 text-center border-t border-slate-800/50 uppercase tracking-widest">PolarNav v1.8</div>
+        <div class="py-1 bg-slate-950 text-[8px] text-slate-600 text-center border-t border-slate-800/50 uppercase tracking-widest">PolarNav v1.2</div>
     </div>
 
     <div id="map"></div>
@@ -314,7 +314,7 @@
         </div>
     </div>
 
-    <div class="absolute bottom-24 right-4 z-[900] bg-slate-900/80 backdrop-blur-sm px-2 py-1 rounded text-[9px] text-slate-400 border border-slate-700/50 pointer-events-none" id="cache-debug">
+    <div class="absolute top-24 left-4 z-[900] bg-slate-900/80 backdrop-blur-sm px-2 py-1 rounded text-[9px] text-slate-400 border border-slate-700/50 pointer-events-none" id="cache-debug">
         <i class="fa-solid fa-server"></i> <span id="cache-status-text">Cache: Laster...</span>
     </div>
 
@@ -415,7 +415,6 @@
                 document.getElementById('cache-status-text').innerText = "Cache: Klar";
                 document.getElementById('cache-status-text').className = "text-slate-400 font-bold";
             } else {
-                alert("ADVARSEL: Kunne ikke laste cache-verktøyet. Sjekk internettforbindelsen og oppdater siden.");
                 document.getElementById('cache-status-text').innerText = "Plugin Mangler!";
                 document.getElementById('cache-status-text').className = "text-red-500 font-bold";
             }
