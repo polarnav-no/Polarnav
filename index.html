@@ -368,7 +368,7 @@
 
         // Leaflet CRS Definitions
         const crs3995 = new L.Proj.CRS('EPSG:3995', '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs', {
-            origin: [-4194304, 4194304], resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256], bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
+            origin: [-4194304, 4194304], resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256, 128, 64, 32, 16, 8], bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
         });
 
         // --- 2. STATE ---
@@ -814,3 +814,4 @@
 </body>
 
 </html>
+
