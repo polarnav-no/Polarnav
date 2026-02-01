@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolarNav - Gentoo Edition v1.0 (Mosaic)</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.2/proj4leaflet.min.js"></script>
+
+    <script src="https://unpkg.com/geotiff@1.0.9/dist/geotiff.bundle.min.js"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet@3.10.0/dist/georaster-layer-for-leaflet.min.js"></script>
+    <script src="https://unpkg.com/@mapbox/togeojson@0.16.0/togeojson.js"></script>
+
+    <style>
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; }
+        #map { height: 100%; width: 100%; z-index: 0; background-color: #0f172a; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+        
+        /* Leaflet Overrides */
+        .leaflet-control-layers { background: #1e293b; color: white; border: 1px solid #334155; border-radius: 0.25rem; }
+        .cursor-crosshair { cursor: crosshair !important; }
+        .leaflet-popup-content-wrapper { background: rgba(30, 41, 59, 0.98); color: #e2e8f0; border: 1px solid #475569; border-radius: 4px; padding: 0; }
+        .leaflet-popup-content { margin: 0; line-height: 1.2; }
+        .leaflet-popup-tip { background: #1e293b; border: 1px solid #475569; border-top: none; border-left: none; }
+        
+        /* Custom Labels & Icons */
+        .measure-label { background: rgba(15, 23, 42, 0.95); border: 1px solid #475569; color: #fbbf24; padding: 2px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .grid-label { font-size: 9px; font-weight: bold; text-shadow: 0px 0px 3px #000; }
+        .ais-ship-icon { display: flex; align-items: center; justify-content: center; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.6)); }
+        .ais-ship-arrow { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 12px solid #f97316; }
+        
+        /* Color Swatch */
+        .color-swatch { transition: transform 0.1s; border: 1px solid rgba(255,255,255,0.3); }
+        .color-swatch:active { transform: scale(0.9); }
+        
+        /* Marker Pin CSS */
+        .custom-pin {
+            width: 30px; height: 30px; border-radius: 50% 50% 50% 0;
+            position: absolute; transform: rotate(-45deg);
+            left: 50%; top: 50%; margin: -15px 0 0 -15px;
+            box-shadow: -2px 2px 4px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.5);
+        }
+        .custom-pin-emoji {
+            transform: rotate(45deg); font-size: 16px;
+            position: absolute; top: 3px; left: 4px;
+            width: 20px; height: 20px; text-align: center; line-height: 20px;
+        }
+
+        /* GPS Pulse */
+        @keyframes pulse-ring { 0% { transform: scale(0.33); } 80%, 100% { opacity: 0; } }
+        @keyframes pulse-dot { 0% { transform: scale(0.8); } 50% { transform: scale(1); } 100% { transform: scale(0.8); } }
+        .gps-marker { position: relative; width: 24px; height: 24px; }
+        .gps-marker::before { content: ''; position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; background-color: #3b82f6; border-radius: 50%; animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+        .gps-marker::after { content: ''; position: absolute; left: 25%; top: 25%; display: block; width: 50%; height: 50%; background-color: white; border-radius: 50%; animation: pulse-dot 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) -0.4s infinite; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+
+        /* Drag Overlay */
+        #drop-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.9); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; border: 4px dashed #3b82f6; backdrop-filter: blur(2px); }
+
+        /* Date Input Styling */
+        input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(1); opacity: 0.6; width: 12px; height: 12px; }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+        
+        /* Range Select Styling */
+        #lookback-select { 
+            background-color: transparent; 
+            color: #94a3b8; 
+            font-size: 10px; 
+            font-weight: bold; 
+            border: none; 
+            text-align: center; 
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        #lookback-select:hover { color: #fff; }
+        #lookback-select:focus { outline: none; }
+    </style>
+</head>
+<body class="text-slate-200 text-xs bg-slate-900 font-sans antialiased selection:bg-blue-500 selection:text-white">
+
+    <div id="drop-overlay">
+        <i class="fa-solid fa-cloud-arrow-up text-5xl text-blue-400 mb-4 animate-bounce"></i>
+        <h2 class="text-xl font-bold text-white tracking-wide">SLIPP FILEN HER</h2>
+        <p class="text-slate-400 mt-2 text-xs">Støtter: .gpx, .kml, .json, .tif</p>
+    </div>
+
+    <div class="absolute top-0 left-0 right-0 h-14 bg-slate-900/95 backdrop-blur-md z-[1000] flex items-center justify-between px-4 border-b border-blue-500/30 shadow-xl">
+        <div class="flex items-center gap-3 w-48">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 border border-white/10 group cursor-pointer hover:scale-105 transition">
+                <i class="fa-brands fa-linux text-white text-lg drop-shadow-md"></i>
+            </div>
+            <div class="flex flex-col justify-center">
+                <h1 class="font-bold text-sm tracking-widest text-white leading-none">POLAR<span class="text-blue-400">NAV</span></h1>
+                <span class="text-[8px] text-slate-400 tracking-[0.2em] font-medium mt-0.5">GENTOO EDITION</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-4 justify-end">
+            <div class="flex flex-col items-end text-right mr-1">
+                 <div class="flex items-center gap-1.5 text-xs font-mono font-bold text-white">
+                    <i class="fa-regular fa-clock text-blue-400 text-[10px]"></i>
+                    <span id="local-time">--:--</span>
+                 </div>
+                 <div class="text-[9px] text-slate-500 font-medium" id="local-date">--.--.----</div>
+            </div>
+            <div class="h-8 w-px bg-slate-700/50"></div>
+            <button onclick="toggleSidebar()" class="w-9 h-9 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-md border border-slate-700 transition active:scale-95 shadow-sm">
+                <i class="fa-solid fa-bars text-sm"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="absolute top-16 left-1/2 transform -translate-x-1/2 z-[900] flex items-center gap-1 bg-slate-800/90 backdrop-blur-md border border-slate-600/50 rounded-lg p-1 shadow-2xl">
+        <button onclick="changeDate(-1)" class="w-8 h-8 flex items-center justify-center text-blue-400 hover:text-white hover:bg-slate-700 rounded transition" title="Forrige dag">
+            <i class="fa-solid fa-chevron-left text-sm"></i>
+        </button>
+        
+        <div class="flex flex-col items-center justify-center mx-1 gap-0">
+            <div class="relative group">
+                <input type="date" id="header-date-input" onchange="fetchData()" class="bg-transparent text-white font-mono font-bold text-sm text-center border-none focus:ring-0 cursor-pointer w-[110px] h-5 py-0 px-1 hover:text-blue-300 transition tracking-wide" title="Velg dato">
+            </div>
+            <div class="flex items-center gap-1 border-t border-slate-600/50 pt-0.5 mt-0.5 w-full justify-center">
+                <i class="fa-solid fa-history text-[8px] text-slate-500"></i>
+                <select id="lookback-select" onchange="changeLookback()" title="Tidsvindu for satellittbilder">
+                    <option value="0">1 dag</option>
+                    <option value="2" selected>3 dager</option>
+                    <option value="6">7 dager</option>
+                </select>
+            </div>
+        </div>
+
+        <button onclick="changeDate(1)" class="w-8 h-8 flex items-center justify-center text-blue-400 hover:text-white hover:bg-slate-700 rounded transition" title="Neste dag">
+            <i class="fa-solid fa-chevron-right text-sm"></i>
+        </button>
+        <div class="w-px h-5 bg-slate-600 mx-2"></div>
+        <button onclick="fetchLatest()" class="h-8 px-3 flex items-center gap-1.5 text-[10px] font-bold text-green-400 hover:text-white hover:bg-green-700/40 rounded transition uppercase tracking-wider" title="Sett til Nå">
+            <i class="fa-solid fa-bolt"></i> NÅ
+        </button>
+        <button onclick="fetchData()" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded transition ml-1" title="Tving oppdatering">
+            <i class="fa-solid fa-rotate text-sm"></i>
+        </button>
+    </div>
+
+    <div id="sidebar" class="absolute top-14 right-0 w-44 bg-slate-900/95 backdrop-blur-sm h-[calc(100%-3.5rem)] z-[1000] transform transition-transform duration-300 translate-x-0 border-l border-slate-700/50 flex flex-col shadow-2xl">
+        <div class="p-2 flex-1 overflow-y-auto space-y-2">
+            
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('settings-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <span class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-gear"></i> Oppsett</span>
+                    <i id="settings-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
+                </button>
+                <div id="settings-panel" class="hidden p-2 bg-slate-950/30 border-t border-slate-700/50 space-y-2">
+                    <div>
+                        <label class="text-[8px] text-slate-500 block mb-1 uppercase">Projeksjon</label>
+                        <select id="proj-select" onchange="changeProjection()" class="w-full bg-slate-900 text-slate-200 border border-slate-600 rounded px-1.5 py-1 text-[9px] focus:border-blue-500 outline-none">
+                            <option value="EPSG:3857">Standard (Global)</option>
+                            <option value="EPSG:3995">Arktisk (Nord)</option>
+                        </select>
+                    </div>
+                    <div class="bg-slate-900 p-1.5 rounded border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="text-[8px] text-slate-400 uppercase font-bold">Gradnett</label>
+                            <input type="checkbox" id="check-graticule" onchange="toggleGraticule()" class="accent-blue-500 h-3 w-3 cursor-pointer">
+                        </div>
+                        <select id="graticule-color-select" onchange="changeGraticuleColor()" class="w-full bg-slate-800 text-white border border-slate-600 rounded px-1 py-0.5 text-[9px] outline-none">
+                            <option value="#06b6d4">Cyan (Std)</option>
+                            <option value="#ffffff">Hvit</option>
+                            <option value="#94a3b8">Grå</option>
+                            <option value="#ef4444">Rød</option>
+                            <option value="#eab308">Gul</option>
+                            <option value="#10b981">Grønn</option>
+                            <option value="#000000">Svart</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[8px] text-slate-500 block mb-1 uppercase">Sentinel API</label>
+                        <input type="password" id="api-key-input" placeholder="Nøkkel..." class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px]">
+                    </div>
+                    
+                    <div>
+                        <label class="text-[8px] text-slate-500 block mb-1 uppercase">Sensor Modus</label>
+                        <select id="layer-mode-select" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px] focus:border-blue-500 outline-none">
+                            <option value="EW_HH_DB" selected>EW - HH - DB (Best Kontrast)</option>
+                            <option value="EW_HV_DB">EW - HV - DB (Alternativ)</option>
+                            <option value="EW_HH">EW - HH (Linear/Standard)</option>
+                            <option value="IW_VV">IW - VV (Kyst/Land)</option>
+                        </select>
+                    </div>
+
+                    <button onclick="applyCredentials()" class="w-full bg-slate-700 hover:bg-blue-600 text-white py-1 rounded text-[9px] font-medium transition shadow-sm">Lagre & Oppdater</button>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('ais-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-radar"></i> AIS</h3>
+                    <i id="ais-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
+                </button>
+                <div id="ais-panel" class="p-2 border-t border-slate-700/50 space-y-2">
+                    <div class="grid gap-1">
+                        <input type="text" id="bw-client-id" placeholder="Client ID" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px]">
+                        <input type="password" id="bw-client-secret" placeholder="Client Secret" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px]">
+                    </div>
+                    <button onclick="fetchBarentsWatchAIS()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-1.5 rounded text-[9px] font-bold transition flex items-center justify-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-satellite-dish"></i> Hent Fartøy
+                    </button>
+                    <p id="ais-status" class="text-[8px] text-center text-slate-500 italic truncate">Klar til søk</p>
+                    <div class="border-t border-slate-700/50 pt-2">
+                        <div class="flex gap-1">
+                            <input type="text" id="ais-search-query" placeholder="Søk skip..." class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px]">
+                            <button onclick="searchShip()" class="bg-slate-700 hover:bg-blue-500 text-white px-2 py-1 rounded text-[9px]"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <p id="search-status" class="text-[8px] text-right text-slate-500 mt-1 italic h-3"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('layers-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-layer-group"></i> Kartlag</h3>
+                    <i id="layers-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
+                </button>
+                <div id="layers-panel" class="p-2 border-t border-slate-700/50">
+                    <div class="space-y-1" id="layer-list">
+                        <div class="flex items-center justify-between p-1 hover:bg-slate-800/50 rounded transition cursor-pointer group" onclick="toggleLayer('google')">
+                            <span class="text-[9px] text-slate-300 group-hover:text-white flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-yellow-600"></div> GMRT/Google</span>
+                            <input type="checkbox" id="check-google" class="accent-blue-500 h-3 w-3 cursor-pointer">
+                        </div>
+                        <div class="flex items-center justify-between p-1 hover:bg-slate-800/50 rounded transition cursor-pointer group" onclick="toggleLayer('ice')">
+                            <span class="text-[9px] text-slate-300 group-hover:text-white flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-500"></div> Iskart (BW)</span>
+                            <input type="checkbox" id="check-ice" class="accent-blue-500 h-3 w-3 cursor-pointer">
+                        </div>
+                        <div class="flex items-center justify-between p-1 hover:bg-slate-800/50 rounded transition cursor-pointer group" onclick="toggleLayer('sentinel')">
+                            <span class="text-[9px] text-slate-300 group-hover:text-white flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-green-500"></div> Sentinel-1</span>
+                            <input type="checkbox" id="check-sentinel" class="accent-blue-500 h-3 w-3 cursor-pointer">
+                        </div>
+                        <div class="flex items-center justify-between p-1 hover:bg-slate-800/50 rounded transition cursor-pointer group" onclick="toggleLayer('ais')">
+                            <span class="text-[9px] text-slate-300 group-hover:text-white flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-orange-500"></div> AIS Fartøy</span>
+                            <input type="checkbox" id="check-ais" class="accent-blue-500 h-3 w-3 cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('local-files-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-regular fa-folder-open"></i> Filer</h3>
+                    <i id="local-files-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform"></i>
+                </button>
+                <div id="local-files-panel" class="hidden p-2 border-t border-slate-700/50 min-h-[40px]">
+                    <div id="custom-layers-list" class="space-y-1">
+                        <p id="no-files-msg" class="text-[8px] text-slate-600 text-center italic py-2">Dra inn GPX/TIFF filer</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('contrast-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-circle-half-stroke"></i> Kontrast</h3>
+                    <i id="contrast-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
+                </button>
+                <div id="contrast-panel" class="p-2 border-t border-slate-700/50">
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between text-[8px] text-slate-500 font-mono"><span>Mørk</span><span id="brightness-val" class="text-blue-400">600</span><span>Lys</span></div>
+                        <input type="range" id="brightness-slider" min="100" max="2000" value="600" step="50" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
+                <button onclick="toggleSection('tools-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
+                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-toolbox"></i> Verktøy</h3>
+                    <i id="tools-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
+                </button>
+                <div id="tools-panel" class="p-2 border-t border-slate-700/50">
+                    <div class="flex flex-col gap-2">
+                        <button id="btn-measure" onclick="toggleMeasureTool()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 px-2 rounded text-[9px] font-medium transition flex items-center justify-between gap-1 border border-slate-600/50">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-ruler-combined text-slate-400"></i> Linjal</span>
+                            <span id="status-measure" class="text-[8px] uppercase font-bold text-slate-500">AV</span>
+                        </button>
+                        <button id="btn-clear-measure" onclick="clearMeasure()" class="hidden text-[8px] text-red-400 hover:text-red-300 text-center font-medium border border-red-900/50 bg-red-900/10 rounded py-1">Slett måling</button>
+                        
+                        <button id="btn-marker" onclick="toggleMarkerTool()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 px-2 rounded text-[9px] font-medium transition flex items-center justify-between gap-1 border border-slate-600/50 relative">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-location-dot text-slate-400"></i> Markør</span>
+                            <span id="status-marker" class="text-[8px] uppercase font-bold text-slate-500">AV</span>
+                        </button>
+                        
+                        <div id="marker-palette" class="hidden bg-slate-900 border border-slate-600 rounded p-1.5 mt-1 flex flex-col gap-1.5">
+                            <div class="flex gap-1 justify-between">
+                                <div onclick="selectMarkerColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 cursor-pointer border border-transparent hover:border-white"></div>
+                                <div onclick="selectMarkerColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 cursor-pointer border border-transparent hover:border-white"></div>
+                                <div onclick="selectMarkerColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 cursor-pointer border border-transparent hover:border-white"></div>
+                                <div onclick="selectMarkerColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 cursor-pointer border border-transparent hover:border-white"></div>
+                                <div onclick="selectMarkerColor('#f97316')" class="w-4 h-4 rounded-full bg-orange-500 cursor-pointer border border-transparent hover:border-white"></div>
+                            </div>
+                            <div class="h-px bg-slate-700"></div>
+                            <div class="flex gap-1 justify-between text-sm">
+                                <button onclick="selectMarkerIcon('🐻‍❄️')" class="hover:scale-125 transition" title="Isbjørn">🐻‍❄️</button>
+                                <button onclick="selectMarkerIcon('🐧')" class="hover:scale-125 transition" title="Pingvin">🐧</button>
+                                <button onclick="selectMarkerIcon('🦭')" class="hover:scale-125 transition" title="Sel">🦭</button>
+                                <button onclick="selectMarkerIcon('🐋')" class="hover:scale-125 transition" title="Hval">🐋</button>
+                                <button onclick="selectMarkerIcon('⚠️')" class="hover:scale-125 transition" title="Fare">⚠️</button>
+                            </div>
+                            <div class="text-[7px] text-slate-500 text-center italic">Klikk i kartet</div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="py-1 bg-slate-950 text-[8px] text-slate-600 text-center border-t border-slate-800/50 uppercase tracking-widest">PolarNav v1.0</div>
+    </div>
+
+    <div id="map"></div>
+    
+    <div class="absolute top-32 left-4 z-[900] flex flex-col shadow-2xl rounded-md overflow-hidden border border-slate-600/50">
+        <button onclick="state.mapInstance.zoomIn()" class="w-9 h-9 bg-slate-800/90 hover:bg-blue-600 text-white flex items-center justify-center transition border-b border-slate-600/50 backdrop-blur-sm" title="Zoom inn">
+            <i class="fa-solid fa-plus text-xs"></i>
+        </button>
+        <button onclick="centerMapOnShip()" class="w-9 h-9 bg-slate-800/90 hover:bg-blue-600 text-white flex items-center justify-center transition border-b border-slate-600/50 backdrop-blur-sm" title="Gå til skip">
+            <i class="fa-solid fa-location-crosshairs text-xs"></i>
+        </button>
+        <button onclick="state.mapInstance.zoomOut()" class="w-9 h-9 bg-slate-800/90 hover:bg-blue-600 text-white flex items-center justify-center transition backdrop-blur-sm" title="Zoom ut">
+            <i class="fa-solid fa-minus text-xs"></i>
+        </button>
+    </div>
+
+    <div class="absolute top-28 left-1/2 transform -translate-x-1/2 pointer-events-none z-[800]">
+        <div class="bg-slate-900/60 backdrop-blur text-[9px] text-slate-300 px-3 py-0.5 rounded-full border border-slate-700/30 shadow-sm flex items-center gap-2">
+             <span>DATA:</span>
+             <span id="map-date-display" class="font-mono font-bold text-white">--.--.----</span>
+        </div>
+    </div>
+
+    <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-full px-6 py-2 flex gap-6 shadow-2xl z-[1000]">
+        <div class="text-center">
+            <div class="text-[7px] text-slate-500 uppercase tracking-widest font-bold">COG</div>
+            <div class="text-sm font-mono font-bold text-blue-400" id="val-cog">000°</div>
+        </div>
+        <div class="text-center border-l border-slate-700/50 pl-6">
+            <div class="text-[7px] text-slate-500 uppercase tracking-widest font-bold">SOG</div>
+            <div class="text-sm font-mono font-bold text-white" id="val-sog">0.0 <span class="text-[9px] text-slate-500 font-normal">kn</span></div>
+        </div>
+        <div class="text-center border-l border-slate-700/50 pl-6 hidden sm:block">
+            <div class="text-[7px] text-slate-500 uppercase tracking-widest font-bold">POSISJON</div>
+            <div class="flex gap-3 mt-0.5">
+                <div class="text-[10px] font-mono text-white" id="val-lat">--° --.--' N</div>
+                <div class="text-[10px] font-mono text-white" id="val-lon">--° --.--' E</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="absolute bottom-6 left-4 z-[1000] hidden sm:block">
+        <div class="bg-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded px-2.5 py-2 shadow-lg pointer-events-none w-fit">
+            <div class="text-[8px] text-slate-500 uppercase tracking-widest mb-0.5 font-bold">MUSEPEKER</div>
+            <div id="cursor-pos" class="text-[10px] font-mono text-white leading-tight">--° --.--' N, --° --.--' E</div>
+            <div class="h-px bg-slate-700 my-1.5"></div>
+            <div class="text-[8px] text-slate-500 uppercase tracking-widest mb-0.5 font-bold">AVSTAND SKIP</div>
+            <div id="cursor-range" class="text-[10px] font-mono text-yellow-400 leading-tight">-- nm / --°</div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. PROJECTION DEFINITIONS ---
+        // North Pole (Arctic)
+        proj4.defs('EPSG:3995', '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs');
+        // Helper Proj (Greenland) if needed
+        proj4.defs('EPSG:3413', '+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs');
+        
+        window.proj4 = proj4;
+
+        // Leaflet CRS Definitions
+        const crs3995 = new L.Proj.CRS('EPSG:3995', '+proj=stere +lat_0=90 +lat_ts=71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs', {
+            origin: [-4194304, 4194304], resolutions: [16384, 8192, 4096, 2048, 1024, 512, 256], bounds: L.bounds([-4194304, -4194304], [4194304, 4194304])
+        });
+
+        // --- 2. STATE ---
+        const mapConfig = { startLat: 78.2232, startLon: 15.6267, zoom: 6 };
+        const STANDARD_COLORS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00', '#ff8800', '#ff0000', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f43f5e', '#a855f7'];
+
+        const state = {
+            sidebarOpen: true, settingsOpen: false, apiKey: "e75dc2c2-8c74-4206-aaea-83e8bfc9ffff", layerName: "EW_HH_DB", 
+            currentProjection: "EPSG:3857", mapInstance: null, selectedDate: new Date(),
+            layers: { google: null, ice: null, sentinel: null, measure: null, ship: null, ais: null, graticule: null, markers: null },
+            customLayers: {}, customData: [], brightness: 600, simulatingMovement: true,
+            currentPos: { lat: 78.0, lng: 14.0 }, measureActive: false, measurePoints: [], shipMarkers: {},
+            showGraticule: false, graticuleColor: '#06b6d4',
+            // MARKER STATE
+            markerMode: false, selectedMarkerColor: '#ef4444', selectedMarkerIcon: '🐻‍❄️', userMarkers: [],
+            // TIME WINDOW STATE
+            lookbackDays: 2 // Default: 3 days (0=1day, 2=3days, 6=7days)
+        };
+
+        function loadSavedCredentials() {
+            const savedBwId = localStorage.getItem('bw_client_id');
+            const savedBwSecret = localStorage.getItem('bw_client_secret');
+            const savedApiKey = localStorage.getItem('sentinel_api_key');
+            const savedGrat = localStorage.getItem('show_graticule');
+            const savedGratColor = localStorage.getItem('graticule_color');
+            const savedLayerMode = localStorage.getItem('sentinel_layer_mode'); 
+            const savedMarkers = localStorage.getItem('user_markers');
+            const savedLookback = localStorage.getItem('lookback_days');
+            
+            if (savedBwId) document.getElementById('bw-client-id').value = savedBwId;
+            if (savedBwSecret) document.getElementById('bw-client-secret').value = savedBwSecret;
+            if (savedApiKey) { document.getElementById('api-key-input').value = savedApiKey; state.apiKey = savedApiKey; }
+            if (savedGrat === 'true') { state.showGraticule = true; document.getElementById('check-graticule').checked = true; }
+            if (savedGratColor) { state.graticuleColor = savedGratColor; document.getElementById('graticule-color-select').value = savedGratColor; }
+            if (savedLayerMode) { state.layerName = savedLayerMode; document.getElementById('layer-mode-select').value = savedLayerMode; }
+            if (savedMarkers) { state.userMarkers = JSON.parse(savedMarkers); }
+            if (savedLookback) { 
+                state.lookbackDays = parseInt(savedLookback); 
+                document.getElementById('lookback-select').value = savedLookback;
+            }
+        }
+
+        function saveCredentials(bwId, bwSecret, sentKey) {
+            if(bwId) localStorage.setItem('bw_client_id', bwId);
+            if(bwSecret) localStorage.setItem('bw_client_secret', bwSecret);
+            if(sentKey) localStorage.setItem('sentinel_api_key', sentKey);
+            localStorage.setItem('show_graticule', state.showGraticule);
+            localStorage.setItem('graticule_color', state.graticuleColor);
+            const mode = document.getElementById('layer-mode-select').value;
+            localStorage.setItem('sentinel_layer_mode', mode);
+            state.layerName = mode;
+        }
+
+        function saveMarkers() { localStorage.setItem('user_markers', JSON.stringify(state.userMarkers)); }
+        
+        function changeLookback() {
+            const val = document.getElementById('lookback-select').value;
+            state.lookbackDays = parseInt(val);
+            localStorage.setItem('lookback_days', val);
+            fetchData();
+        }
+
+        // --- 3. MAP INIT ---
+        function initMap() {
+            if (state.mapInstance) state.mapInstance.remove();
+            let options = { zoomControl: false, attributionControl: false, maxBoundsViscosity: 1.0, minZoom: 1 };
+            
+            // Handle Projections
+            if (state.currentProjection === 'EPSG:3995') { 
+                options.crs = crs3995; options.center = [78, 15]; options.zoom = 2; options.maxBounds = null; 
+            } 
+            else { 
+                // Web Mercator
+                options.crs = L.CRS.EPSG3857; options.center = [mapConfig.startLat, mapConfig.startLon]; options.zoom = mapConfig.zoom; options.maxBounds = null; 
+            }
+
+            state.mapInstance = L.map('map', options);
+            L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(state.mapInstance);
+            state.layers.measure = L.layerGroup().addTo(state.mapInstance);
+            state.layers.markers = L.layerGroup().addTo(state.mapInstance); // Layer for custom markers
+            state.layers.ais = L.layerGroup().addTo(state.mapInstance); 
+            addBaseLayers(); addOverlayLayers(); setupMapEvents(); setupDragAndDrop(); restoreCustomLayers(); 
+            if(state.showGraticule) createGraticuleLayer();
+            restoreUserMarkers(); // Load saved markers
+            document.getElementById('brightness-slider').addEventListener('input', function(e) { updateBrightnessLabel(e.target.value); applyBrightness(e.target.value); });
+        }
+
+        // --- GLOBAL GRATICULE ---
+        function createGraticuleLayer() {
+            if (state.layers.graticule) state.mapInstance.removeLayer(state.layers.graticule);
+            const gridGroup = L.layerGroup();
+            const style = { color: state.graticuleColor, weight: 1.5, opacity: 0.6, dashArray: null }; 
+            const textIcon = (txt) => L.divIcon({className: 'grid-label', html: `<span style="color:${state.graticuleColor}">${txt}</span>`, iconSize: [40,10], iconAnchor: [20,5]});
+            
+            for (let lng = -180; lng < 180; lng += 20) {
+                let latLngs = []; for (let lat = -90; lat <= 90; lat += 5) latLngs.push([lat, lng]);
+                L.polyline(latLngs, style).addTo(gridGroup);
+                if (state.currentProjection === 'EPSG:3995') L.marker([65, lng], {icon: textIcon(`${Math.abs(lng)}°`)}).addTo(gridGroup);
+                else L.marker([0, lng], {icon: textIcon(`${lng}°`)}).addTo(gridGroup);
+            }
+            
+            for (let lat = -80; lat <= 80; lat += 10) {
+                 let latLngs = []; for (let lng = -180; lng <= 180; lng += 5) latLngs.push([lat, lng]);
+                 L.polyline(latLngs, style).addTo(gridGroup);
+                 L.marker([lat, 0], {icon: textIcon(`${Math.abs(lat)}°${lat>=0?'N':'S'}`)}).addTo(gridGroup);
+            }
+
+            state.layers.graticule = gridGroup; state.layers.graticule.addTo(state.mapInstance);
+        }
+        function toggleGraticule() { state.showGraticule = document.getElementById('check-graticule').checked; saveCredentials(); if (state.showGraticule) createGraticuleLayer(); else if (state.layers.graticule) state.mapInstance.removeLayer(state.layers.graticule); }
+        function changeGraticuleColor() { state.graticuleColor = document.getElementById('graticule-color-select').value; saveCredentials(); if(state.showGraticule) createGraticuleLayer(); }
+
+        // --- LAYERS ---
+        function addBaseLayers() {
+            if (state.currentProjection === 'EPSG:3995') {
+                 // GMRT North
+                 L.tileLayer.wms('https://www.gmrt.org/services/mapserver/wms_NP?', { layers: 'North_Polar_Bathymetry', format: 'image/png', transparent: false, attribution: 'GMRT', version: '1.3.0', tiled: true, useCache: true, crossOrigin: 'anonymous' }).addTo(state.mapInstance);
+            } else { 
+                // Web Mercator
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', opacity: 0.3, useCache: true, crossOrigin: 'anonymous' }).addTo(state.mapInstance);
+            }
+        }
+
+        function addOverlayLayers() {
+            const dateStr = state.selectedDate.toISOString().split('T')[0];
+            if (state.currentProjection === 'EPSG:3857') {
+                state.layers.google = L.tileLayer('http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}', { attribution: '&copy; Google', keepBuffer: 50, maxZoom: 20, zIndex: 0, useCache: true, crossOrigin: 'anonymous' });
+                if (document.getElementById('check-google').checked) state.layers.google.addTo(state.mapInstance);
+            }
+            
+            state.layers.ice = getRealIceLayer(dateStr); 
+            state.layers.ice.setZIndex(10); 
+            if (document.getElementById('check-ice').checked) state.layers.ice.addTo(state.mapInstance);
+            
+            state.layers.sentinel = generateSentinelLayer(dateStr); 
+            state.layers.sentinel.setZIndex(20); 
+            if (document.getElementById('check-sentinel').checked) { 
+                state.layers.sentinel.addTo(state.mapInstance); 
+                updateSentinelBrightness(state.brightness);
+                state.layers.sentinel.on('tileerror', function(e) { console.log("Sentinel Tile Error:", e); });
+            }
+            
+            if (document.getElementById('check-ais').checked && state.layers.ais) state.layers.ais.addTo(state.mapInstance);
+        }
+
+        async function fetchBarentsWatchAIS() {
+            const statusLabel = document.getElementById('ais-status');
+            const clientId = document.getElementById('bw-client-id').value.trim(); const clientSecret = document.getElementById('bw-client-secret').value.trim();
+            saveCredentials(clientId, clientSecret, null);
+            if (!clientId || !clientSecret) { statusLabel.innerText = "Mangler ID/Secret."; statusLabel.className = "text-[8px] text-red-400 font-bold mt-0.5"; return; }
+            statusLabel.innerText = "Kobler til..."; statusLabel.className = "text-[8px] text-blue-400 font-bold mt-0.5";
+            try {
+                const tr = await fetch("https://corsproxy.io/?" + encodeURIComponent("https://id.barentswatch.no/connect/token"), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ 'client_id': clientId, 'client_secret': clientSecret, 'scope': 'ais', 'grant_type': 'client_credentials' }) });
+                if (!tr.ok) throw new Error(`Auth: ${tr.status}`); const td = await tr.json();
+                statusLabel.innerText = "Søker...";
+                const b = state.mapInstance.getBounds(); const geo = { type: "Polygon", coordinates: [[[b.getWest(), b.getSouth()], [b.getEast(), b.getSouth()], [b.getEast(), b.getNorth()], [b.getWest(), b.getNorth()], [b.getWest(), b.getSouth()]]] };
+                const dr = await fetch("https://corsproxy.io/?" + encodeURIComponent('https://live.ais.barentswatch.no/v1/latest/combined'), { method: 'POST', headers: { 'Authorization': `Bearer ${td.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ geometry: geo }) });
+                if (!dr.ok) throw new Error(`Data: ${dr.status}`); const sl = await dr.json();
+                state.layers.ais.clearLayers(); state.shipMarkers = {};
+                if (sl.length > 0) { sl.forEach(s => { if (s.latitude) createShipMarker(s); }); statusLabel.innerText = `Fant ${sl.length} skip!`; statusLabel.className = "text-[8px] text-green-400 font-bold mt-0.5"; if (!document.getElementById('check-ais').checked) { document.getElementById('check-ais').checked = true; state.layers.ais.addTo(state.mapInstance); } } 
+                else { statusLabel.innerText = "Ingen skip."; statusLabel.className = "text-[8px] text-orange-400 mt-0.5"; }
+            } catch (e) { console.error(e); statusLabel.innerText = "Feil (Nett/Auth)."; statusLabel.className = "text-[8px] text-red-400 mt-0.5"; }
+        }
+
+        function createShipMarker(ship) {
+            const n = ship.name || "Ukjent"; const m = ship.mmsi ? String(ship.mmsi) : "---"; const s = (ship.sog!==undefined?ship.sog:(ship.speedOverGround||0)).toFixed(1); const c = (ship.cog!==undefined?ship.cog:(ship.courseOverGround||0));
+            const icon = L.divIcon({ className: '', html: `<div class="ais-ship-icon" style="transform: rotate(${c}deg);"><div class="ais-ship-arrow"></div></div>`, iconSize: [20, 20], iconAnchor: [10, 10] });
+            const marker = L.marker([ship.latitude, ship.longitude], { icon: icon });
+            marker.bindPopup(`<div class="text-slate-100 p-1 min-w-[120px]"><h3 class="font-bold text-xs mb-1 text-blue-400">${n}</h3><div class="bg-slate-800 rounded p-1 border border-slate-600"><p class="text-[9px] text-slate-400 mb-0.5">MMSI: ${m}</p><div class="flex justify-between text-[9px] mt-1"><div>${s} kn</div><div>${c.toFixed(0)}°</div></div></div></div>`);
+            marker.addTo(state.layers.ais);
+            marker.shipData = { name: n.toLowerCase(), mmsi: m };
+            if (m !== "---") state.shipMarkers[m] = marker; state.shipMarkers[n.toLowerCase()] = marker; 
+        }
+
+        function searchShip() {
+            const q = document.getElementById('ais-search-query').value.trim().toLowerCase();
+            const stat = document.getElementById('search-status');
+            if (!q) { stat.innerText = ""; return; }
+            if (!state.mapInstance.hasLayer(state.layers.ais)) { stat.innerText = "Slå på AIS."; return; }
+            let found = state.shipMarkers[q];
+            if (!found) state.layers.ais.eachLayer(l => { if (l.shipData && (l.shipData.name.includes(q) || l.shipData.mmsi.includes(q))) found = l; });
+            if (found) { stat.innerText = "Funnet!"; stat.className = "text-[8px] text-right text-green-400 mt-0.5 font-bold italic"; state.mapInstance.flyTo(found.getLatLng(), 10); found.openPopup(); }
+            else { stat.innerText = "Ikke funnet."; stat.className = "text-[8px] text-right text-red-400 mt-0.5 italic"; }
+        }
+
+        function changeProjection() { state.currentProjection = document.getElementById('proj-select').value; const gd = document.getElementById('check-google').parentElement; if (state.currentProjection === 'EPSG:3857') { gd.classList.remove('opacity-50', 'pointer-events-none'); document.getElementById('check-google').checked = false; } else { gd.classList.add('opacity-50', 'pointer-events-none'); document.getElementById('check-google').checked = false; } initMap(); }
+        
+        function changeDate(d) { state.selectedDate.setDate(state.selectedDate.getDate() + d); updateHeaderDate(); fetchData(); }
+        function fetchLatest() { state.selectedDate = new Date(); updateHeaderDate(); fetchData(); }
+        
+        // --- UPDATED DATE HEADER LOGIC FOR RANGE ---
+        function updateHeaderDate() { 
+            const end = state.selectedDate;
+            const start = new Date(end);
+            start.setDate(end.getDate() - state.lookbackDays);
+
+            // Update Input
+            document.getElementById('header-date-input').value = end.toISOString().split('T')[0];
+            
+            // Update Display (Show Range if lookback > 0)
+            const prettyEnd = `${String(end.getDate()).padStart(2,'0')}.${String(end.getMonth()+1).padStart(2,'0')}`;
+            const prettyStart = `${String(start.getDate()).padStart(2,'0')}.${String(start.getMonth()+1).padStart(2,'0')}`;
+            
+            const displayEl = document.getElementById('map-date-display');
+            if (state.lookbackDays > 0) {
+                displayEl.innerText = `${prettyStart} - ${prettyEnd}`;
+                displayEl.classList.add('text-yellow-400');
+                displayEl.classList.remove('text-white');
+            } else {
+                displayEl.innerText = `${prettyEnd}.${end.getFullYear()}`;
+                displayEl.classList.add('text-white');
+                displayEl.classList.remove('text-yellow-400');
+            }
+        }
+
+        function getRealIceLayer(d) { return L.tileLayer.wms("https://geo.barentswatch.no/geoserver/bw/ows", { layers: 'icechart_latest', format: 'image/png', transparent: true, opacity: 0.7, version: (state.currentProjection === 'EPSG:3857' ? '1.3.0' : '1.1.1'), attribution: 'BW', uppercase: true, keepBuffer: 50, tiled: true, time: d + 'T00:00:00Z', useCache: true, crossOrigin: 'anonymous', cacheMaxAge: 259200000 }); }
+        
+        // --- UPDATED SENTINEL LOGIC FOR RANGE ---
+        function generateSentinelLayer(d) { 
+            if (state.apiKey && state.apiKey.length > 5) {
+                let u = state.apiKey.startsWith('http') ? state.apiKey : `https://sh.dataspace.copernicus.eu/ogc/wms/${state.apiKey}`;
+                const activeLayerName = state.layerName || "EW_HH_DB";
+
+                // Calculate Time Range
+                const endDate = new Date(state.selectedDate);
+                const startDate = new Date(endDate);
+                startDate.setDate(endDate.getDate() - state.lookbackDays);
+
+                const startStr = startDate.toISOString().split('T')[0];
+                const endStr = endDate.toISOString().split('T')[0];
+                
+                // Construct WMS Time Param (ISO8601 Range)
+                // Format: start/end
+                const timeParam = `${startStr}T00:00:00Z/${endStr}T23:59:59Z`;
+
+                return L.tileLayer.wms(u, { 
+                    layers: activeLayerName, 
+                    format: 'image/png', 
+                    transparent: true, 
+                    version: (state.currentProjection === 'EPSG:3857' ? '1.3.0' : '1.1.1'), 
+                    attribution: 'Copernicus', 
+                    uppercase: true, 
+                    tileSize: 256, 
+                    updateWhenIdle: true, 
+                    keepBuffer: 10,
+                    tiled: true, 
+                    useCache: true, 
+                    crossOrigin: 'anonymous', 
+                    cacheMaxAge: 604800000, 
+                    time: timeParam // Uses the range now
+                });
+            } return generateSimulatedRadarLayer('#22c55e', 'Sentinel-1 (Simulert)');
+        }
+        function generateSimulatedRadarLayer(c, t) { const lg = L.layerGroup(); for (let i=0; i<3; i++) L.rectangle([[77+Math.random()*3, 10+Math.random()*15],[77.8, 11.2]], { color: c, weight: 2, fillColor: c, fillOpacity: 0.1, dashArray: '5, 5' }).bindPopup(`<b>${t}</b>`).addTo(lg); return lg; }
+
+        function setupMapEvents() {
+            state.mapInstance.on('mousemove', function(e) { document.getElementById('cursor-pos').innerText = `${toDMS(e.latlng.lat, true)}, ${toDMS(e.latlng.lng, false)}`; const sl = L.latLng(state.currentPos.lat, state.currentPos.lng); document.getElementById('cursor-range').innerText = `${(state.mapInstance.distance(sl, e.latlng) / 1852).toFixed(1)} nm / ${calculateBearing(state.currentPos.lat, state.currentPos.lng, e.latlng.lat, e.latlng.lng).toFixed(0)}°`; });
+            state.mapInstance.on('click', function(e) { 
+                // MARKER LOGIC
+                if (state.markerMode) {
+                    addMarkerToMap(e.latlng.lat, e.latlng.lng, state.selectedMarkerIcon, state.selectedMarkerColor);
+                    return; 
+                }
+
+                if (!state.measureActive) return; 
+                state.measurePoints.push(e.latlng); L.circleMarker(e.latlng, { radius: 3, color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 1 }).addTo(state.layers.measure); if (state.measurePoints.length > 1) { const p1 = state.measurePoints[state.measurePoints.length - 2]; const p2 = state.measurePoints[state.measurePoints.length - 1]; L.polyline([p1, p2], { color: '#fbbf24', weight: 2, dashArray: '4, 4' }).addTo(state.layers.measure); const d = (state.mapInstance.distance(p1, p2) / 1852).toFixed(2); L.marker(L.latLng((p1.lat + p2.lat) / 2, (p1.lng + p2.lng) / 2), { icon: L.divIcon({ className: 'measure-label', html: `${d} nm <br> ${calculateBearing(p1.lat, p1.lng, p2.lat, p2.lng).toFixed(0)}°`, iconSize: [60, 20], iconAnchor: [30, 10] }) }).addTo(state.layers.measure); } 
+            });
+        }
+
+        // --- MARKER TOOLS ---
+        function toggleMarkerTool() {
+            state.markerMode = !state.markerMode;
+            const btn = document.getElementById('btn-marker');
+            const pal = document.getElementById('marker-palette');
+            const map = document.getElementById('map');
+            
+            if (state.markerMode) {
+                // Turn off measure if active
+                if(state.measureActive) toggleMeasureTool();
+
+                document.getElementById('status-marker').innerText="PÅ"; 
+                document.getElementById('status-marker').className="text-green-400 font-bold"; 
+                btn.classList.replace('bg-slate-700','bg-slate-600'); 
+                map.classList.add('cursor-crosshair');
+                pal.classList.remove('hidden');
+            } else {
+                document.getElementById('status-marker').innerText="AV"; 
+                document.getElementById('status-marker').className="text-slate-500 font-bold"; 
+                btn.classList.replace('bg-slate-600','bg-slate-700'); 
+                map.classList.remove('cursor-crosshair');
+                pal.classList.add('hidden');
+            }
+        }
+
+        function selectMarkerColor(c) { state.selectedMarkerColor = c; }
+        function selectMarkerIcon(i) { state.selectedMarkerIcon = i; }
+
+        function addMarkerToMap(lat, lng, iconChar, color) {
+            const id = Date.now().toString();
+            const markerObj = { id, lat, lng, icon: iconChar, color };
+            state.userMarkers.push(markerObj);
+            saveMarkers();
+            renderMarker(markerObj);
+        }
+
+        function restoreUserMarkers() {
+            state.userMarkers.forEach(m => renderMarker(m));
+        }
+
+        function renderMarker(m) {
+            const iconHtml = `<div class="custom-pin" style="background-color: ${m.color}; box-shadow: 0 0 5px ${m.color};"></div><div class="custom-pin-emoji">${m.icon}</div>`;
+            const icon = L.divIcon({ className: 'relative', html: iconHtml, iconSize: [30, 30], iconAnchor: [15, 30] });
+            const layer = L.marker([m.lat, m.lng], { icon: icon });
+            
+            layer.bindPopup(`
+                <div class="text-center">
+                    <div class="text-lg">${m.icon}</div>
+                    <div class="text-[9px] text-slate-400 mb-1">${toDMS(m.lat, true)} <br> ${toDMS(m.lng, false)}</div>
+                    <button onclick="deleteMarker('${m.id}')" class="bg-red-900/50 hover:bg-red-600 text-white px-2 py-0.5 rounded text-[9px] border border-red-500/50">Slett</button>
+                </div>
+            `);
+            layer.markerId = m.id;
+            layer.addTo(state.layers.markers);
+        }
+
+        // Must attach to window to be accessible from popup string
+        window.deleteMarker = function(id) {
+            state.userMarkers = state.userMarkers.filter(m => m.id !== id);
+            saveMarkers();
+            state.layers.markers.eachLayer(l => {
+                if(l.markerId === id) state.layers.markers.removeLayer(l);
+            });
+        };
+
+        // --- DRAG DROP ---
+        function setupDragAndDrop() { const b = document.body; const o = document.getElementById('drop-overlay'); ['dragenter', 'dragover'].forEach(e => b.addEventListener(e, (ev) => { ev.preventDefault(); o.style.display = "flex"; })); ['dragleave', 'drop'].forEach(e => b.addEventListener(e, (ev) => { ev.preventDefault(); o.style.display = "none"; })); b.addEventListener('drop', handleDrop); }
+        async function handleDrop(e) { for (const f of e.dataTransfer.files) { const n = f.name.toLowerCase(); if (n.endsWith('.tif')) await processGeoTIFF(f); else if (n.endsWith('.gpx') || n.endsWith('.kml') || n.endsWith('.json') || n.endsWith('.geojson')) processVectorFile(f); else alert("Ukjent fil: " + f.name); } }
+        
+        function processVectorFile(file) {
+            const r = new FileReader(); r.onload = function(e) {
+                const t = e.target.result; const x = file.name.split('.').pop().toLowerCase();
+                let g = null;
+                try { const p = new DOMParser(); if (x === 'gpx') g = toGeoJSON.gpx(p.parseFromString(t, 'text/xml')); else if (x === 'kml') g = toGeoJSON.kml(p.parseFromString(t, 'text/xml')); else g = JSON.parse(t);
+                    if (g) {
+                        const id = 'vec-' + Math.random().toString(36).substr(2, 9);
+                        const c = STANDARD_COLORS[0];
+                        const l = L.geoJSON(g, { style: { color: c, weight: 4, opacity: 0.8 }, pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 4, fillColor: c, color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8 }), onEachFeature: (f, l) => { if (f.properties && f.properties.name) l.bindPopup(f.properties.name); } });
+                        l.addTo(state.mapInstance); state.customLayers[id] = l;
+                        state.customData.push({ id: id, type: 'vector', colorIndex: 0 });
+                        addCustomLayerToUI(id, `${x.toUpperCase()}: ${file.name}`, c);
+                    }
+                } catch (er) { alert("Feil: " + er); }
+            }; r.readAsText(file);
+        }
+
+        async function processGeoTIFF(file) {
+            try {
+                const gr = await parseGeoraster(await file.arrayBuffer()); gr.projection = 3413;
+                const id = 'custom-' + Math.random().toString(36).substr(2, 9);
+                state.customData.push({ id: id, name: file.name, georaster: gr, type: 'raster', colorIndex: 0 });
+                renderGeoRaster(id, STANDARD_COLORS[0]);
+            } catch (e) { alert("GeoTIFF Feil: " + e.message); }
+        }
+
+        function renderGeoRaster(id, color) {
+            if (state.customLayers[id]) state.mapInstance.removeLayer(state.customLayers[id]);
+            const item = state.customData.find(i => i.id === id);
+            if(!item) return;
+            const layer = new GeoRasterLayer({
+                georaster: item.georaster, opacity: 1, resolution: 128, debugLevel: 0,
+                pixelValuesToColorFn: values => {
+                    const v = values[0]; if (v===0||isNaN(v)||v===-9999) return null;
+                    const br = Math.min(255, Math.max(0, (v/parseInt(state.brightness))*255));
+                    const r = parseInt(color.slice(1,3),16); const g = parseInt(color.slice(3,5),16); const b = parseInt(color.slice(5,7),16);
+                    return `rgba(${Math.min(255, Math.floor(r * (br/255)))},${Math.min(255, Math.floor(g * (br/255)))},${Math.min(255, Math.floor(b * (br/255)))}, ${br/255})`;
+                }
+            });
+            layer.addTo(state.mapInstance);
+            if (!state.customLayers[id]) state.mapInstance.fitBounds(layer.getBounds());
+            state.customLayers[id] = layer;
+            if (!document.getElementById(`layer-item-${id}`)) addCustomLayerToUI(id, item.name, color);
+        }
+
+        function addCustomLayerToUI(id, name, color) {
+            const list = document.getElementById('custom-layers-list');
+            document.getElementById('no-files-msg').style.display = 'none';
+            if(document.getElementById('local-files-panel').classList.contains('hidden')) toggleSection('local-files-panel');
+            const div = document.createElement('div');
+            div.id = `layer-item-${id}`;
+            div.className = "flex items-center justify-between p-1 hover:bg-slate-800/50 rounded transition group border-b border-slate-700/30 last:border-0";
+            div.innerHTML = `
+                <div class="flex items-center gap-2 overflow-hidden flex-1">
+                    <div id="swatch-${id}" onclick="cycleLayerColor('${id}')" class="w-3 h-3 rounded-full cursor-pointer color-swatch shrink-0" style="background-color: ${color}; box-shadow: 0 0 4px ${color};"></div>
+                    <span class="text-[9px] truncate text-slate-300 cursor-pointer hover:text-white" title="${name}" onclick="toggleCustomLayer('${id}')">${name}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="removeLayer('${id}')" class="text-slate-500 hover:text-red-400 px-1 transition" title="Slett"><i class="fa-solid fa-trash text-[8px]"></i></button>
+                    <input type="checkbox" id="check-${id}" checked class="accent-orange-500 h-2.5 w-2.5 shrink-0" onclick="toggleCustomLayer('${id}')">
+                </div>
+            `;
+            list.appendChild(div);
+        }
+
+        function cycleLayerColor(id) {
+            const item = state.customData.find(i => i.id === id);
+            if (!item) return;
+            item.colorIndex = (item.colorIndex + 1) % STANDARD_COLORS.length;
+            const newColor = STANDARD_COLORS[item.colorIndex];
+            const swatch = document.getElementById(`swatch-${id}`);
+            if(swatch) { swatch.style.backgroundColor = newColor; swatch.style.boxShadow = `0 0 4px ${newColor}`; }
+            if (item.type === 'vector') {
+                const layer = state.customLayers[id];
+                if (layer) { layer.setStyle({ color: newColor, fillColor: newColor }); layer.eachLayer(l => { if (l.setStyle && l instanceof L.CircleMarker) l.setStyle({ fillColor: newColor }); }); }
+            } else if (item.type === 'raster') { renderGeoRaster(id, newColor); }
+        }
+
+        function removeLayer(id) {
+            if (state.customLayers[id]) { state.mapInstance.removeLayer(state.customLayers[id]); delete state.customLayers[id]; }
+            state.customData = state.customData.filter(i => i.id !== id);
+            document.getElementById(`layer-item-${id}`).remove();
+            if (document.getElementById('custom-layers-list').children.length <= 1) document.getElementById('no-files-msg').style.display = 'block';
+        }
+
+        function updateBrightnessLabel(v) { document.getElementById('brightness-val').innerText = v; }
+        function applyBrightness(v) { state.brightness = parseInt(v); updateBrightnessLabel(state.brightness); state.customData.filter(i => i.type === 'raster').forEach(i => { if(document.getElementById(`check-${i.id}`)?.checked) renderGeoRaster(i.id, STANDARD_COLORS[i.colorIndex]); }); updateSentinelBrightness(v); }
+        function updateSentinelBrightness(v) { if (state.layers.sentinel?.getContainer) state.layers.sentinel.getContainer().style.filter = `brightness(${(600/v).toFixed(2)})`; }
+        function toggleSidebar() { const sb = document.getElementById('sidebar'); state.sidebarOpen = !state.sidebarOpen; sb.classList.toggle('translate-x-full', !state.sidebarOpen); }
+        function toggleSection(id) { const p = document.getElementById(id); const a = document.getElementById(id+'-arrow'); p.classList.toggle('hidden'); if(p.classList.contains('hidden')) a.classList.remove('rotate-180'); else a.classList.add('rotate-180'); }
+        
+        function applyCredentials() { 
+            const k = document.getElementById('api-key-input').value.trim(); 
+            // Save API Key, Layer Mode etc
+            saveCredentials(null, null, k); 
+            if(k) state.apiKey=k; 
+            
+            // Force fetch
+            fetchData(); 
+        }
+
+        function toggleLayer(key) { const l = state.layers[key]; const cb = document.getElementById(`check-${key}`); if(state.mapInstance.hasLayer(l)){ state.mapInstance.removeLayer(l); cb.checked=false; } else { state.mapInstance.addLayer(l); cb.checked=true; if(key==='sentinel') setTimeout(()=>updateSentinelBrightness(state.brightness),100); } }
+        function toggleCustomLayer(id) { const l = state.customLayers[id]; const cb = document.getElementById(`check-${id}`); if(state.mapInstance.hasLayer(l)){ state.mapInstance.removeLayer(l); cb.checked=false; } else { state.mapInstance.addLayer(l); cb.checked=true; } }
+        function fetchData() { 
+            const d = document.getElementById('header-date-input').value; 
+            if(!d)return; 
+            state.selectedDate = new Date(d);
+            updateHeaderDate(); 
+            
+            // Refresh ICE (BarentsWatch)
+            if(state.mapInstance.hasLayer(state.layers.ice)) state.mapInstance.removeLayer(state.layers.ice); 
+            state.layers.ice = getRealIceLayer(d); 
+            state.layers.ice.setZIndex(10); 
+            if(document.getElementById('check-ice').checked) state.layers.ice.addTo(state.mapInstance); 
+
+            // Refresh SENTINEL
+            if(state.mapInstance.hasLayer(state.layers.sentinel)) state.mapInstance.removeLayer(state.layers.sentinel); 
+            state.layers.sentinel = generateSentinelLayer(d); 
+            state.layers.sentinel.setZIndex(20); 
+            if(document.getElementById('check-sentinel').checked) { 
+                state.layers.sentinel.addTo(state.mapInstance); 
+                updateSentinelBrightness(state.brightness);
+                state.layers.sentinel.on('tileerror', function(e) { console.log("Sentinel Tile Error:", e); });
+            } 
+        }
+        function toggleMeasureTool() { state.measureActive = !state.measureActive; const btn=document.getElementById('btn-measure'); const map=document.getElementById('map'); if(state.measureActive){ document.getElementById('status-measure').innerText="PÅ"; document.getElementById('status-measure').className="text-green-400 font-bold"; btn.classList.replace('bg-slate-700','bg-slate-600'); map.classList.add('cursor-crosshair'); document.getElementById('btn-clear-measure').classList.remove('hidden'); } else { document.getElementById('status-measure').innerText="AV"; document.getElementById('status-measure').className="text-slate-500 font-bold"; btn.classList.replace('bg-slate-600','bg-slate-700'); map.classList.remove('cursor-crosshair'); } }
+        function clearMeasure() { state.measurePoints=[]; state.layers.measure.clearLayers(); document.getElementById('btn-clear-measure').classList.add('hidden'); }
+        function calculateBearing(lat1,lon1,lat2,lon2){ const toRad=d=>d*Math.PI/180; const toDeg=r=>r*180/Math.PI; const f1=toRad(lat1),f2=toRad(lat2),dl=toRad(lon2-lon1); const y=Math.sin(dl)*Math.cos(f2); const x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl); return (toDeg(Math.atan2(y,x))+360)%360; }
+        
+        function centerMapOnShip() { if (state.currentPos && state.currentPos.lat && state.currentPos.lng) { state.mapInstance.flyTo([state.currentPos.lat, state.currentPos.lng], state.mapInstance.getZoom()); } }
+        function startTracking() { if("geolocation" in navigator) { navigator.geolocation.watchPosition(p => { state.simulatingMovement=false; updatePosition(p.coords.latitude, p.coords.longitude, p.coords.speed, p.coords.heading); }, e => console.warn("GPS Fail"), {enableHighAccuracy:true}); } }
+        
+        function updatePosition(lat, lng, spd, hdg) { 
+            state.currentPos = { lat, lng };
+            if (!state.layers.ship || !state.mapInstance.hasLayer(state.layers.ship)) {
+                if(state.layers.ship) state.mapInstance.removeLayer(state.layers.ship);
+                const shipIcon = L.divIcon({ className: 'gps-marker', iconSize: [24, 24], iconAnchor: [12, 12] });
+                state.layers.ship = L.marker([lat, lng], { icon: shipIcon, zIndexOffset: 1000 }).addTo(state.mapInstance);
+            } else { state.layers.ship.setLatLng([lat, lng]); }
+            document.getElementById('val-lat').innerText = toDMS(lat, true); 
+            document.getElementById('val-lon').innerText = toDMS(lng, false); 
+            document.getElementById('val-sog').innerHTML = `${(spd?spd*1.94384:0).toFixed(1)} <span class="text-[9px] text-slate-500 font-normal">kn</span>`; 
+            document.getElementById('val-cog').innerText = `${hdg?Math.round(hdg).toString().padStart(3,'0'):'000'}°`; 
+        }
+
+        function toDMS(d,isLat) { const a=Math.abs(d); return `${Math.floor(a)}° ${((a-Math.floor(a))*60).toFixed(2)}' ${isLat?(d>=0?'N':'S'):(d>=0?'E':'W')}`; }
+        function restoreCustomLayers() { Object.keys(state.customLayers).forEach(id => { if(document.getElementById(`check-${id}`)?.checked) state.customLayers[id].addTo(state.mapInstance); }); }
+
+        // Local Time Clock
+        setInterval(() => { 
+            const now = new Date();
+            document.getElementById('local-time').innerText = now.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('local-date').innerText = now.toLocaleDateString('no-NO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            if(state.simulatingMovement) { state.currentPos.lat+=0.0005; state.currentPos.lng+=0.001; updatePosition(state.currentPos.lat, state.currentPos.lng, 6.1, 45); }
+        }, 1000);
+
+        document.getElementById('header-date-input').value = new Date().toISOString().split('T')[0];
+        updateHeaderDate();
+        loadSavedCredentials(); 
+        initMap(); 
+        startTracking();
+    </script>
+</body>
+</html>
