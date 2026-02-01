@@ -541,7 +541,7 @@
                 if (!tr.ok) throw new Error(`Auth: ${tr.status}`); const td = await tr.json();
                 statusLabel.innerText = "Søker...";
                 const b = state.mapInstance.getBounds(); const geo = { type: "Polygon", coordinates: [[[b.getWest(), b.getSouth()], [b.getEast(), b.getSouth()], [b.getEast(), b.getNorth()], [b.getWest(), b.getNorth()], [b.getWest(), b.getSouth()]]] };
-                const dr = await fetch("https://corsproxy.io/?" + encodeURIComponent('https://live.ais.barentswatch.no/v1/latest/combined'), { method: 'POST', headers: { 'Authorization': `Bearer ${td.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ geometry: geo }) });
+                const dr = await fetch("https://corsproxy.io/?" + encodeURIComponent("https://live.ais.barentswatch.no/v1/latest/combined"), { method: 'POST', headers: { 'Authorization': `Bearer ${td.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ geometry: geo }) });
                 if (!dr.ok) throw new Error(`Data: ${dr.status}`); const sl = await dr.json();
                 state.layers.ais.clearLayers(); state.shipMarkers = {};
                 if (sl.length > 0) { sl.forEach(s => { if (s.latitude) createShipMarker(s); }); statusLabel.innerText = `Fant ${sl.length} skip!`; statusLabel.className = "text-[8px] text-green-400 font-bold mt-0.5"; if (!document.getElementById('check-ais').checked) { document.getElementById('check-ais').checked = true; state.layers.ais.addTo(state.mapInstance); } } 
@@ -888,3 +888,4 @@
 </body>
 
 </html>
+
