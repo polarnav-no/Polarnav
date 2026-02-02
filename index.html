@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PolarNav - Gentoo Edition v1.2 (Stable Cache)</title>
+    <title>PolarNav - Gentoo Edition (v1.2 Global)</title>
     
-    <meta name="description" content="PolarNav - Gratis verktøy for isnavigasjon i Arktis og Antarktis. Satellittbilder, iskart, ruter og diverse verktøy direkte i nettleseren.">
+    <meta name="description" content="PolarNav - Isnavigasjon med cache-kontroll og global dekning.">
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -32,6 +32,13 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
         
+        /* OPTISK ZOOM FIX */
+        .leaflet-container img.leaflet-tile {
+            image-rendering: pixelated; 
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
         .leaflet-control-layers { background: #1e293b; color: white; border: 1px solid #334155; border-radius: 0.25rem; }
         .cursor-crosshair { cursor: crosshair !important; }
         .leaflet-popup-content-wrapper { background: rgba(30, 41, 59, 0.98); color: #e2e8f0; border: 1px solid #475569; border-radius: 4px; padding: 0; }
@@ -44,16 +51,19 @@
         .color-swatch { transition: transform 0.1s; border: 1px solid rgba(255,255,255,0.3); }
         .color-swatch:active { transform: scale(0.9); }
         
+        /* MARKØR STIL */
         .custom-pin {
             width: 30px; height: 30px; border-radius: 50% 50% 50% 0;
             position: absolute; transform: rotate(-45deg);
             left: 50%; top: 50%; margin: -15px 0 0 -15px;
             box-shadow: -2px 2px 4px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.5);
         }
-        .custom-pin-emoji {
-            transform: rotate(45deg); font-size: 16px;
-            position: absolute; top: 3px; left: 4px;
-            width: 20px; height: 20px; text-align: center; line-height: 20px;
+        /* Justering for FontAwesome ikoner inne i pinnen */
+        .custom-pin-icon {
+            transform: rotate(45deg); position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%) rotate(45deg);
+            font-size: 14px; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            width: 20px; text-align: center; line-height: 20px;
         }
 
         .own-ship-container {
@@ -71,12 +81,11 @@
         input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(1); opacity: 0.6; width: 12px; height: 12px; }
         input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
         
-        #lookback-select { 
-            background-color: transparent; color: #94a3b8; font-size: 10px; font-weight: bold; border: none; 
-            text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none;
-        }
+        /* FIKS FOR SELECT I MØRKE MODUS */
+        #lookback-select { background-color: transparent; color: #94a3b8; font-size: 10px; font-weight: bold; border: none; text-align: center; cursor: pointer; appearance: none; -webkit-appearance: none; }
         #lookback-select:hover { color: #fff; }
         #lookback-select:focus { outline: none; }
+        #lookback-select option { background-color: #1e293b; color: #ffffff; }
     </style>
 </head>
 <body class="text-slate-200 text-xs bg-slate-900 font-sans antialiased selection:bg-blue-500 selection:text-white">
@@ -94,7 +103,7 @@
             </div>
             <div class="flex flex-col justify-center">
                 <h1 class="font-bold text-sm tracking-widest text-white leading-none">POLAR<span class="text-blue-400">NAV</span></h1>
-                <span class="text-[8px] text-slate-400 tracking-[0.2em] font-medium mt-0.5">STABLE EDITION</span>
+                <span class="text-[8px] text-slate-400 tracking-[0.2em] font-medium mt-0.5">GENTOO EDITION</span>
             </div>
         </div>
         <div class="flex items-center gap-4 justify-end">
@@ -196,8 +205,29 @@
                         </select>
                     </div>
 
+                    <div>
+                        <label class="text-[8px] text-slate-500 block mb-1 uppercase">Datakvalitet</label>
+                        <select id="quality-select" class="w-full bg-slate-900 text-white border border-slate-600 rounded px-1.5 py-1 text-[9px] focus:border-blue-500 outline-none">
+                            <option value="low" selected>Lav (JPG)</option>
+                            <option value="high">Høy (PNG)</option>
+                        </select>
+                    </div>
+
                     <button onclick="applyCredentials()" class="w-full bg-slate-700 hover:bg-blue-600 text-white py-1 rounded text-[9px] font-medium transition shadow-sm">Lagre & Oppdater</button>
+                    
+                    <div class="border-t border-slate-700/50 pt-2 mt-2">
+                        <button onclick="clearMapCache()" class="w-full bg-red-900/30 hover:bg-red-800 text-red-300 hover:text-white py-1 rounded text-[9px] font-medium transition border border-red-800/50">Slett Cache (Frigjør plass)</button>
+                    </div>
                 </div>
+            </div>
+
+            <div class="bg-slate-800/50 rounded border border-slate-700/50 p-2 shadow-sm flex flex-col gap-1">
+                <div class="flex justify-between items-center px-0.5">
+                    <span class="text-[8px] text-slate-500 uppercase font-medium tracking-wider">Mørk</span>
+                    <span id="brightness-val" class="text-[9px] font-mono font-bold text-blue-400">600</span>
+                    <span class="text-[8px] text-slate-500 uppercase font-medium tracking-wider">Lys</span>
+                </div>
+                <input type="range" id="brightness-slider" min="100" max="2000" value="600" step="50" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" title="Justér lysstyrke">
             </div>
 
             <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
@@ -236,19 +266,6 @@
             </div>
 
             <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
-                <button onclick="toggleSection('contrast-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
-                    <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-circle-half-stroke"></i> Kontrast</h3>
-                    <i id="contrast-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
-                </button>
-                <div id="contrast-panel" class="p-2 border-t border-slate-700/50">
-                    <div class="flex flex-col gap-1">
-                        <div class="flex justify-between text-[8px] text-slate-500 font-mono"><span>Mørk</span><span id="brightness-val" class="text-blue-400">600</span><span>Lys</span></div>
-                        <input type="range" id="brightness-slider" min="100" max="2000" value="600" step="50" class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-slate-800/50 rounded border border-slate-700/50 overflow-hidden">
                 <button onclick="toggleSection('tools-panel')" class="w-full flex items-center justify-between p-2 hover:bg-slate-700/50 transition group">
                     <h3 class="text-[9px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest flex items-center gap-2"><i class="fa-solid fa-toolbox"></i> Verktøy</h3>
                     <i id="tools-panel-arrow" class="fa-solid fa-chevron-down text-[9px] text-slate-500 transition-transform rotate-180"></i>
@@ -266,23 +283,32 @@
                             <span id="status-marker" class="text-[8px] uppercase font-bold text-slate-500">AV</span>
                         </button>
                         
-                        <div id="marker-palette" class="hidden bg-slate-900 border border-slate-600 rounded p-1.5 mt-1 flex flex-col gap-1.5">
-                            <div class="flex gap-1 justify-between">
-                                <div onclick="selectMarkerColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 cursor-pointer border border-transparent hover:border-white"></div>
-                                <div onclick="selectMarkerColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 cursor-pointer border border-transparent hover:border-white"></div>
-                                <div onclick="selectMarkerColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 cursor-pointer border border-transparent hover:border-white"></div>
-                                <div onclick="selectMarkerColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 cursor-pointer border border-transparent hover:border-white"></div>
-                                <div onclick="selectMarkerColor('#f97316')" class="w-4 h-4 rounded-full bg-orange-500 cursor-pointer border border-transparent hover:border-white"></div>
+                        <div id="marker-palette" class="hidden bg-slate-900 border border-slate-600 rounded p-1.5 mt-1 flex flex-col gap-2 shadow-xl">
+                            <div class="flex gap-1.5 justify-between px-1">
+                                <div onclick="selectMarkerColor('#ef4444')" class="w-4 h-4 rounded-full bg-red-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Rød"></div>
+                                <div onclick="selectMarkerColor('#22c55e')" class="w-4 h-4 rounded-full bg-green-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Grønn"></div>
+                                <div onclick="selectMarkerColor('#3b82f6')" class="w-4 h-4 rounded-full bg-blue-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Blå"></div>
+                                <div onclick="selectMarkerColor('#eab308')" class="w-4 h-4 rounded-full bg-yellow-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Gul"></div>
+                                <div onclick="selectMarkerColor('#f97316')" class="w-4 h-4 rounded-full bg-orange-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Oransje"></div>
+                                <div onclick="selectMarkerColor('#64748b')" class="w-4 h-4 rounded-full bg-slate-500 cursor-pointer border border-slate-600 hover:border-white hover:scale-110 transition shadow-sm" title="Grå"></div>
                             </div>
-                            <div class="h-px bg-slate-700"></div>
-                            <div class="flex gap-1 justify-between text-sm">
-                                <button onclick="selectMarkerIcon('🐻‍❄️')" class="hover:scale-125 transition" title="Isbjørn">🐻‍❄️</button>
-                                <button onclick="selectMarkerIcon('🐧')" class="hover:scale-125 transition" title="Pingvin">🐧</button>
-                                <button onclick="selectMarkerIcon('🦭')" class="hover:scale-125 transition" title="Sel">🦭</button>
-                                <button onclick="selectMarkerIcon('🐋')" class="hover:scale-125 transition" title="Hval">🐋</button>
-                                <button onclick="selectMarkerIcon('⚠️')" class="hover:scale-125 transition" title="Fare">⚠️</button>
+                            
+                            <div class="h-px bg-slate-700/50 mx-1"></div>
+                            
+                            <div class="grid grid-cols-5 gap-1.5 px-1 overflow-y-auto max-h-[140px] scrollbar-thin mt-2">
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-location-crosshairs\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Posisjon"><i class="fa-solid fa-location-crosshairs"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-diamond\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Bøye / Merke"><i class="fa-solid fa-diamond"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-flag\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Flagg / Mål"><i class="fa-solid fa-flag"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-anchor\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Anker"><i class="fa-solid fa-anchor"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-ship\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Skip"><i class="fa-solid fa-ship"></i></button>
+                        
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-helicopter\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Helikopter"><i class="fa-solid fa-helicopter"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-box\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Last / Utstyr"><i class="fa-solid fa-box"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-paw\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Isbjørn / Rovdyr"><i class="fa-solid fa-paw"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-fish\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Hval / Sel / Sjøliv"><i class="fa-solid fa-fish"></i></button>
+                                <button onclick="selectMarkerIcon('<i class=\'fa-solid fa-feather\'></i>')" class="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded transition" title="Pingvin / Fugl"><i class="fa-solid fa-feather"></i></button>
                             </div>
-                            <div class="text-[7px] text-slate-500 text-center italic">Klikk i kartet</div>
+                            <div class="text-[7px] text-slate-500 text-center italic mt-1">Klikk i kartet for å sette</div>
                         </div>
 
                     </div>
@@ -360,6 +386,9 @@
         const mapConfig = { startLat: 78.2232, startLon: 15.6267, zoom: 6 };
         const STANDARD_COLORS = ['#00ffff', '#ff00ff', '#ffff00', '#00ff00', '#ff8800', '#ff0000', '#ffffff', '#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f43f5e', '#a855f7'];
 
+        const IMO_ARCTIC_BOUNDS = [[60, -180], [90, 180]];    
+        const IMO_ANTARCTIC_BOUNDS = [[-90, -180], [-60, 180]]; 
+
         const state = {
             sidebarOpen: true, settingsOpen: false, apiKey: "", layerName: "EW_HH_DB", 
             currentProjection: "EPSG:3857", mapInstance: null, selectedDate: new Date(),
@@ -367,9 +396,9 @@
             customLayers: {}, customData: [], brightness: 600, simulatingMovement: true,
             currentPos: { lat: 78.0, lng: 14.0, hdg: 0 }, measureActive: false, measurePoints: [],
             showGraticule: false, graticuleColor: '#06b6d4',
-            markerMode: false, selectedMarkerColor: '#ef4444', selectedMarkerIcon: '🐻‍❄️', userMarkers: [],
+            markerMode: false, selectedMarkerColor: '#ef4444', selectedMarkerIcon: '<i class="fa-solid fa-location-crosshairs"></i>', userMarkers: [],
             lookbackDays: 2, isFollowing: false, trackPoints: [],
-            sentinelCachedMode: false
+            sentinelCachedMode: false, sentinelQuality: 'low' 
         };
 
         function loadSavedCredentials() {
@@ -377,6 +406,7 @@
             const savedGrat = localStorage.getItem('show_graticule');
             const savedGratColor = localStorage.getItem('graticule_color');
             const savedLayerMode = localStorage.getItem('sentinel_layer_mode'); 
+            const savedQuality = localStorage.getItem('sentinel_quality');
             const savedMarkers = localStorage.getItem('user_markers');
             const savedLookback = localStorage.getItem('lookback_days');
             
@@ -384,8 +414,33 @@
             if (savedGrat === 'true') { state.showGraticule = true; document.getElementById('check-graticule').checked = true; }
             if (savedGratColor) { state.graticuleColor = savedGratColor; document.getElementById('graticule-color-select').value = savedGratColor; }
             if (savedLayerMode) { state.layerName = savedLayerMode; document.getElementById('layer-mode-select').value = savedLayerMode; }
+            if (savedQuality) { state.sentinelQuality = savedQuality; document.getElementById('quality-select').value = savedQuality; }
             if (savedMarkers) { state.userMarkers = JSON.parse(savedMarkers); }
             if (savedLookback) { state.lookbackDays = parseInt(savedLookback); document.getElementById('lookback-select').value = savedLookback; }
+            
+            restoreSectionState('settings-panel', false); 
+            restoreSectionState('layers-panel', true);    
+            restoreSectionState('local-files-panel', false);
+            restoreSectionState('tools-panel', false);
+        }
+
+        function restoreSectionState(id, defaultOpen) {
+            const savedState = localStorage.getItem('section_' + id);
+            let shouldOpen = defaultOpen;
+            if (savedState !== null) shouldOpen = (savedState === 'true');
+            
+            const p = document.getElementById(id);
+            const a = document.getElementById(id + '-arrow');
+            
+            if (p && a) { 
+                if (shouldOpen) {
+                    p.classList.remove('hidden');
+                    a.classList.add('rotate-180');
+                } else {
+                    p.classList.add('hidden');
+                    a.classList.remove('rotate-180');
+                }
+            }
         }
 
         function saveCredentials(sentKey) {
@@ -395,10 +450,25 @@
             const mode = document.getElementById('layer-mode-select').value;
             localStorage.setItem('sentinel_layer_mode', mode);
             state.layerName = mode;
+            const qual = document.getElementById('quality-select').value;
+            localStorage.setItem('sentinel_quality', qual);
+            state.sentinelQuality = qual;
         }
 
         function saveMarkers() { localStorage.setItem('user_markers', JSON.stringify(state.userMarkers)); }
         function changeLookback() { state.lookbackDays = parseInt(document.getElementById('lookback-select').value); localStorage.setItem('lookback_days', state.lookbackDays); fetchData(); }
+
+        function clearMapCache() {
+            if(confirm("Dette vil slette alle lagrede kartfliser for å frigjøre plass. Du må laste ned områder på nytt. Er du sikker?")) {
+                new PouchDB('offline-tiles').destroy().then(function () {
+                    alert("Cache tømt! Siden lastes på nytt.");
+                    location.reload();
+                }).catch(function (err) {
+                    console.log(err);
+                    alert("Kunne ikke tømme cache. Feil: " + err);
+                });
+            }
+        }
 
         function initMap() {
             if (state.mapInstance) state.mapInstance.remove();
@@ -410,7 +480,6 @@
             state.mapInstance = L.map('map', options);
             L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(state.mapInstance);
             
-            // --- CRITICAL CHECK: IS OFFLINE CACHE LOADED? ---
             if (L.TileLayer.prototype.setPouchDBCached) {
                 document.getElementById('cache-status-text').innerText = "Cache: Klar";
                 document.getElementById('cache-status-text').className = "text-slate-400 font-bold";
@@ -495,40 +564,82 @@
             if (state.apiKey && state.apiKey.length > 5) {
                 let u = state.apiKey.startsWith('http') ? state.apiKey : `https://sh.dataspace.copernicus.eu/ogc/wms/${state.apiKey}`;
                 const activeLayerName = state.layerName || "EW_HH_DB";
-                const endDate = new Date(state.selectedDate); const startDate = new Date(endDate); startDate.setDate(endDate.getDate() - state.lookbackDays);
+                
+                const endDate = new Date(state.selectedDate); 
+                const startDate = new Date(endDate); 
+                startDate.setDate(endDate.getDate() - state.lookbackDays);
                 const timeParam = `${startDate.toISOString().split('T')[0]}T00:00:00Z/${endDate.toISOString().split('T')[0]}T23:59:59Z`;
 
+                // --- DYNAMISK GRENSE FOR ANTARKTIS-STØTTE ---
+                // Hvis vi er i EPSG:3857 (Standard Global), bruker vi HELE verden (World bounds).
+                // Dette lar deg scrolle ned til Antarktis og laste bilder der.
+                // Hvis vi er i EPSG:3995 (Arktisk), låser vi oss til nord.
+                let activeBounds = IMO_ARCTIC_BOUNDS; 
+                if (state.currentProjection === 'EPSG:3857') {
+                    activeBounds = [[-90, -180], [90, 180]]; // World Bounds
+                }
+
+                // --- 2 KVALITETSMODUSER (UTEN BLEND) ---
+                const lowConfig = {
+                    format: 'image/jpeg', transparent: false, className: '', // Rå JPEG (Svart bakgrunn)
+                    maxNativeZoom: 12, tileSize: 512, zoomOffset: -1
+                };
+                const highConfig = {
+                    format: 'image/png', transparent: true, className: '',
+                    maxNativeZoom: 14, tileSize: 256, zoomOffset: 0
+                };
+
+                let currentConfig = lowConfig; // Default
+                if (state.sentinelQuality === 'high') currentConfig = highConfig;
+
                 const layer = L.tileLayer.wms(u, { 
-                    layers: activeLayerName, format: 'image/png', transparent: true, 
+                    layers: activeLayerName, 
+                    
+                    format: currentConfig.format, 
+                    transparent: currentConfig.transparent, 
+                    className: currentConfig.className,
+                    
                     version: (state.currentProjection === 'EPSG:3857' ? '1.3.0' : '1.1.1'), 
-                    attribution: 'Copernicus', uppercase: true, tileSize: 512, width: 512, height: 512,
-                    updateWhenIdle: false, keepBuffer: 10, tiled: true, 
+                    attribution: 'Copernicus', 
+                    uppercase: true, 
                     
-                    // CORS is critical for saving canvas data
+                    maxNativeZoom: currentConfig.maxNativeZoom,
+                    maxZoom: 18,
+                    minZoom: 4,
+                    
+                    updateWhenIdle: true, 
+                    keepBuffer: 2, 
+                    bounds: activeBounds, 
+                    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+                    
+                    tileSize: currentConfig.tileSize,
+                    width: currentConfig.tileSize, 
+                    height: currentConfig.tileSize,
+                    zoomOffset: currentConfig.zoomOffset,
+                    
                     crossOrigin: 'anonymous', 
-                    
-                    // OFFLINE CACHE CONFIGURATION
                     useCache: true,
-                    saveToCache: !state.sentinelCachedMode, // Lagre KUN når vi er i LIVE modus
-                    useOnlyCache: state.sentinelCachedMode, // KUN cache når i OFFLINE modus
+                    saveToCache: !state.sentinelCachedMode, 
+                    useOnlyCache: state.sentinelCachedMode, 
                     cacheMaxAge: 604800000, 
                     time: timeParam 
                 });
 
-                // LISTENERS FOR DEBUG
                 layer.on('tilecachehit', function(e){ showCacheStatus('Cache OK', 'text-orange-400'); });
                 layer.on('tilecachemiss', function(e){ 
                     if(state.sentinelCachedMode) showCacheStatus('Mangler (Offline)', 'text-red-500'); 
                     else showCacheStatus('Laster ned...', 'text-blue-400'); 
                 });
-                layer.on('tileerror', function(e){ showCacheStatus('Feil (CORS?)', 'text-red-600'); });
+                layer.on('tileerror', function(e){ console.warn("Tile error (ignored)"); });
                 layer.on('load', function(e){ 
                     if(!state.sentinelCachedMode) showCacheStatus('Lagret til DB', 'text-green-400'); 
                 });
                 
                 return layer;
-            } return generateSimulatedRadarLayer('#22c55e', 'Sentinel-1 (Simulert)');
+            } 
+            return generateSimulatedRadarLayer('#22c55e', 'Sentinel-1 (Simulert)');
         }
+
         function generateSimulatedRadarLayer(c, t) { const lg = L.layerGroup(); for (let i=0; i<3; i++) L.rectangle([[77+Math.random()*3, 10+Math.random()*15],[77.8, 11.2]], { color: c, weight: 2, fillColor: c, fillOpacity: 0.1, dashArray: '5, 5' }).bindPopup(`<b>${t}</b>`).addTo(lg); return lg; }
 
         function showCacheStatus(msg, colorClass) {
@@ -536,7 +647,6 @@
             txt.innerText = msg; txt.className = "font-bold " + colorClass;
         }
 
-        // --- STRICT OFFLINE TOGGLE ---
         function toggleSentinelMode() {
             if (!state.mapInstance.hasLayer(state.layers.sentinel)) {
                 state.sentinelCachedMode = false;
@@ -591,10 +701,16 @@
         function addMarkerToMap(lat, lng, iconChar, color) { const id = Date.now().toString(); const markerObj = { id, lat, lng, icon: iconChar, color }; state.userMarkers.push(markerObj); saveMarkers(); renderMarker(markerObj); }
         function restoreUserMarkers() { state.userMarkers.forEach(m => renderMarker(m)); }
         function renderMarker(m) {
-            const iconHtml = `<div class="custom-pin" style="background-color: ${m.color}; box-shadow: 0 0 5px ${m.color};"></div><div class="custom-pin-emoji">${m.icon}</div>`;
+            const iconHtml = `<div class="custom-pin" style="background-color: ${m.color}; box-shadow: 0 0 5px ${m.color};"></div><div class="custom-pin-icon">${m.icon}</div>`;
             const icon = L.divIcon({ className: 'relative', html: iconHtml, iconSize: [30, 30], iconAnchor: [15, 30] });
             const layer = L.marker([m.lat, m.lng], { icon: icon });
-            layer.bindPopup(`<div class="text-center"><div class="text-lg">${m.icon}</div><div class="text-[9px] text-slate-400 mb-1">${toDMS(m.lat, true)} <br> ${toDMS(m.lng, false)}</div><button onclick="deleteMarker('${m.id}')" class="bg-red-900/50 hover:bg-red-600 text-white px-2 py-0.5 rounded text-[9px] border border-red-500/50">Slett</button></div>`);
+            
+            layer.bindPopup(`<div class="text-center">
+                <div class="text-2xl mb-1 text-slate-200">${m.icon}</div>
+                <div class="text-[9px] text-slate-400 mb-2 font-mono">${toDMS(m.lat, true)} <br> ${toDMS(m.lng, false)}</div>
+                <button onclick="deleteMarker('${m.id}')" class="bg-red-900/40 hover:bg-red-600 text-red-200 hover:text-white px-3 py-1 rounded text-[9px] border border-red-500/30 transition uppercase font-bold tracking-wider">Slett</button>
+            </div>`);
+            
             layer.markerId = m.id; layer.addTo(state.layers.markers);
         }
         window.deleteMarker = function(id) { state.userMarkers = state.userMarkers.filter(m => m.id !== id); saveMarkers(); state.layers.markers.eachLayer(l => { if(l.markerId === id) state.layers.markers.removeLayer(l); }); };
@@ -612,7 +728,19 @@
         function applyBrightness(v) { state.brightness = parseInt(v); updateBrightnessLabel(state.brightness); state.customData.filter(i => i.type === 'raster').forEach(i => { if(document.getElementById(`check-${i.id}`)?.checked) renderGeoRaster(i.id, STANDARD_COLORS[i.colorIndex]); }); updateSentinelBrightness(v); }
         function updateSentinelBrightness(v) { if (state.layers.sentinel?.getContainer) state.layers.sentinel.getContainer().style.filter = `brightness(${(600/v).toFixed(2)})`; }
         function toggleSidebar() { const sb = document.getElementById('sidebar'); state.sidebarOpen = !state.sidebarOpen; sb.classList.toggle('translate-x-full', !state.sidebarOpen); }
-        function toggleSection(id) { const p = document.getElementById(id); const a = document.getElementById(id+'-arrow'); p.classList.toggle('hidden'); if(p.classList.contains('hidden')) a.classList.remove('rotate-180'); else a.classList.add('rotate-180'); }
+        
+        function toggleSection(id) { 
+            const p = document.getElementById(id); 
+            const a = document.getElementById(id+'-arrow'); 
+            p.classList.toggle('hidden'); 
+            
+            // LAGRE NY STATUS
+            const isOpen = !p.classList.contains('hidden');
+            localStorage.setItem('section_' + id, isOpen);
+
+            if(p.classList.contains('hidden')) a.classList.remove('rotate-180'); 
+            else a.classList.add('rotate-180'); 
+        }
         
         function applyCredentials() { const k = document.getElementById('api-key-input').value.trim(); saveCredentials(k); if(k) state.apiKey=k; fetchData(); }
 
